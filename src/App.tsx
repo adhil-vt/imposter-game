@@ -9,6 +9,7 @@ import { CluePage } from './pages/CluePage';
 import { VotingPage } from './pages/VotingPage';
 import { ResultsPage } from './pages/ResultsPage';
 import { RulesPage } from './pages/RulesPage';
+import { AboutPage } from './pages/AboutPage';
 
 function GameContent() {
   const { gameState } = useGame();
@@ -19,6 +20,8 @@ function GameContent() {
         return <HomePage />;
       case 'RULES':
         return <RulesPage />;
+      case 'ABOUT':
+        return <AboutPage />;
       case 'SETUP':
         return <CreateGamePage />;
       case 'REVEAL':

@@ -1,6 +1,6 @@
 import React from 'react';
 import { useGame } from '../context/GameContext';
-import { Home, HelpCircle, Volume2, VolumeX } from 'lucide-react';
+import { Home, HelpCircle, Volume2, VolumeX, User } from 'lucide-react';
 
 interface HeaderProps {
   showHelp?: boolean;
@@ -24,6 +24,23 @@ export const Header: React.FC<HeaderProps> = ({ showHelp = true }) => {
       resetGame();
     }
   };
+
+  const handleAboutClick = () => {
+    if (gameState !== 'HOME' && gameState !== 'RULES' && gameState !== 'ABOUT') {
+      showConfirm({
+        title: 'End Current Game?',
+        message: 'Are you sure you want to view the about page? All active match progress will be lost.',
+        confirmText: 'Go to About',
+        cancelText: 'Keep Playing',
+        onConfirm: () => {
+          setGameState('ABOUT');
+        }
+      });
+    } else {
+      setGameState('ABOUT');
+    }
+  };
+
 
   return (
     <header className="w-full flex items-center justify-between py-4 px-6 md:px-8 border-b border-brand-border backdrop-blur-md sticky top-0 z-40 bg-brand-dark/40">
@@ -66,6 +83,16 @@ export const Header: React.FC<HeaderProps> = ({ showHelp = true }) => {
             title="How to Play"
           >
             <HelpCircle className="w-4 h-4" />
+          </button>
+        )}
+
+        {gameState !== 'ABOUT' && (
+          <button
+            onClick={handleAboutClick}
+            className="p-2.5 rounded-xl bg-white/5 border border-white/10 text-slate-400 hover:text-white hover:bg-white/10 hover:border-white/20 transition-all duration-300"
+            title="About Developer"
+          >
+            <User className="w-4 h-4" />
           </button>
         )}
       </div>

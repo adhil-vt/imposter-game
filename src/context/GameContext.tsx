@@ -17,7 +17,7 @@ export interface Player {
   word: string;
 }
 
-export type GameState = 'HOME' | 'RULES' | 'SETUP' | 'REVEAL' | 'CLUES' | 'VOTING' | 'RESULTS';
+export type GameState = 'HOME' | 'RULES' | 'ABOUT' | 'SETUP' | 'REVEAL' | 'CLUES' | 'VOTING' | 'RESULTS';
 
 export interface GameStats {
   gamesPlayed: number;
