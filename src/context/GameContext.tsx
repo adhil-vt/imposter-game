@@ -37,107 +37,70 @@ export interface GameHistoryItem {
   commonWord: string;
 }
 
-export interface Theme {
+export interface Palette {
   id: string;
   name: string;
-  mode: 'dark' | 'light';
   colors: {
     primary: string;
     secondary: string;
-    dark: string;
-    card: string;
-    border: string;
-    glow1: string;
-    glow2: string;
   };
+  darkBg: string;
+  lightBg: string;
 }
 
-export const THEMES: Theme[] = [
+export const PALETTES: Palette[] = [
   {
     id: 'cyber',
     name: 'Cyberpunk',
-    mode: 'dark',
-    colors: {
-      primary: '#6366F1',
-      secondary: '#D946EF',
-      dark: '#080A16',
-      card: 'rgba(17, 24, 48, 0.55)',
-      border: 'rgba(255, 255, 255, 0.08)',
-      glow1: 'rgba(99, 102, 241, 0.15)',
-      glow2: 'rgba(217, 70, 239, 0.15)'
-    }
+    colors: { primary: '#6366F1', secondary: '#D946EF' },
+    darkBg: '#080A16',
+    lightBg: '#FAF9FF'
   },
   {
     id: 'matrix',
     name: 'Matrix Green',
-    mode: 'dark',
-    colors: {
-      primary: '#10B981',
-      secondary: '#3B82F6',
-      dark: '#050906',
-      card: 'rgba(10, 24, 15, 0.55)',
-      border: 'rgba(255, 255, 255, 0.06)',
-      glow1: 'rgba(16, 185, 129, 0.15)',
-      glow2: 'rgba(59, 130, 246, 0.15)'
-    }
+    colors: { primary: '#10B981', secondary: '#3B82F6' },
+    darkBg: '#050906',
+    lightBg: '#F6FBF8'
   },
   {
     id: 'crimson',
     name: 'Gothic Crimson',
-    mode: 'dark',
-    colors: {
-      primary: '#EF4444',
-      secondary: '#F97316',
-      dark: '#0C0404',
-      card: 'rgba(28, 12, 12, 0.55)',
-      border: 'rgba(255, 255, 255, 0.06)',
-      glow1: 'rgba(239, 68, 68, 0.15)',
-      glow2: 'rgba(249, 115, 22, 0.15)'
-    }
+    colors: { primary: '#EF4444', secondary: '#F97316' },
+    darkBg: '#0C0404',
+    lightBg: '#FFF8F8'
   },
   {
-    id: 'light-pearl',
-    name: 'Pearl White',
-    mode: 'light',
-    colors: {
-      primary: '#4F46E5',
-      secondary: '#9333EA',
-      dark: '#F8FAFC',
-      card: 'rgba(255, 255, 255, 0.75)',
-      border: 'rgba(0, 0, 0, 0.08)',
-      glow1: 'rgba(79, 70, 229, 0.08)',
-      glow2: 'rgba(147, 51, 234, 0.08)'
-    }
-  },
-  {
-    id: 'light-mint',
-    name: 'Mint Fresh',
-    mode: 'light',
-    colors: {
-      primary: '#0D9488',
-      secondary: '#2563EB',
-      dark: '#F0FDFA',
-      card: 'rgba(255, 255, 255, 0.75)',
-      border: 'rgba(0, 0, 0, 0.08)',
-      glow1: 'rgba(13, 148, 136, 0.08)',
-      glow2: 'rgba(37, 99, 235, 0.08)'
-    }
-  },
-  {
-    id: 'light-sakura',
+    id: 'sakura',
     name: 'Sakura Pink',
-    mode: 'light',
-    colors: {
-      primary: '#E11D48',
-      secondary: '#D946EF',
-      dark: '#FFF1F2',
-      card: 'rgba(255, 255, 255, 0.75)',
-      border: 'rgba(0, 0, 0, 0.08)',
-      glow1: 'rgba(225, 29, 72, 0.08)',
-      glow2: 'rgba(217, 70, 239, 0.08)'
-    }
+    colors: { primary: '#E11D48', secondary: '#EC4899' },
+    darkBg: '#0F050C',
+    lightBg: '#FFF5FA'
+  },
+  {
+    id: 'ocean',
+    name: 'Ocean Breeze',
+    colors: { primary: '#2563EB', secondary: '#0D9488' },
+    darkBg: '#040914',
+    lightBg: '#F5F9FF'
+  },
+  {
+    id: 'sunset',
+    name: 'Sunset Gold',
+    colors: { primary: '#F59E0B', secondary: '#EC4899' },
+    darkBg: '#0A0704',
+    lightBg: '#FFFDF5'
   }
 ];
+
+const hexToRgb = (hex: string): string => {
+  const shorthandRegex = /^#?([a-f\d])([a-f\d])([a-f\d])$/i;
+  const fullHex = hex.replace(shorthandRegex, (_, r, g, b) => r + r + g + g + b + b);
+  const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(fullHex);
+  return result
+    ? `${parseInt(result[1], 16)}, ${parseInt(result[2], 16)}, ${parseInt(result[3], 16)}`
+    : '99, 102, 241';
+};
 
 interface GameContextType {
   gameState: GameState;
@@ -229,8 +192,10 @@ interface GameContextType {
     onConfirm: () => void;
   }) => void;
   closeConfirm: () => void;
-  currentThemeId: string;
-  setCurrentThemeId: (id: string) => void;
+  themeMode: 'light' | 'dark';
+  setThemeMode: (mode: 'light' | 'dark') => void;
+  themePaletteId: string;
+  setThemePaletteId: (id: string) => void;
 }
 
 const GameContext = createContext<GameContextType | undefined>(undefined);
@@ -239,27 +204,45 @@ const GameContext = createContext<GameContextType | undefined>(undefined);
 export const AVATAR_POOL = ['🦊', '🐙', '🥑', '🚀', '👻', '🐨', '🦄', '🐼', '🦁', '🐸', '🍕', '🎮', '🎭', '💎', '🍿', '🦖'];
 
 export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [currentThemeId, setCurrentThemeId] = useState<string>(() => {
-    const saved = localStorage.getItem('whoisfake_theme_id');
+  const [themeMode, setThemeMode] = useState<'light' | 'dark'>(() => {
+    const saved = localStorage.getItem('whoisfake_theme_mode');
+    return (saved as 'light' | 'dark') || 'dark';
+  });
+
+  const [themePaletteId, setThemePaletteId] = useState<string>(() => {
+    const saved = localStorage.getItem('whoisfake_theme_palette');
     return saved || 'cyber';
   });
 
   useEffect(() => {
-    const theme = THEMES.find(t => t.id === currentThemeId) || THEMES[0];
-    localStorage.setItem('whoisfake_theme_id', currentThemeId);
+    const palette = PALETTES.find(p => p.id === themePaletteId) || PALETTES[0];
+    localStorage.setItem('whoisfake_theme_mode', themeMode);
+    localStorage.setItem('whoisfake_theme_palette', themePaletteId);
     
     // Apply CSS variables dynamically
     const root = document.documentElement;
-    root.setAttribute('data-mode', theme.mode);
+    root.setAttribute('data-mode', themeMode);
     
-    root.style.setProperty('--color-brand-dark', theme.colors.dark);
-    root.style.setProperty('--color-brand-card', theme.colors.card);
-    root.style.setProperty('--color-brand-border', theme.colors.border);
-    root.style.setProperty('--color-brand-primary', theme.colors.primary);
-    root.style.setProperty('--color-brand-secondary', theme.colors.secondary);
-    root.style.setProperty('--glow-color-1', theme.colors.glow1);
-    root.style.setProperty('--glow-color-2', theme.colors.glow2);
-  }, [currentThemeId]);
+    const isLight = themeMode === 'light';
+    const darkBgColor = isLight ? palette.lightBg : palette.darkBg;
+    const cardColor = isLight ? 'rgba(255, 255, 255, 0.75)' : 'rgba(17, 24, 48, 0.55)';
+    const borderColor = isLight ? 'rgba(0, 0, 0, 0.08)' : 'rgba(255, 255, 255, 0.08)';
+    
+    const primaryRgb = hexToRgb(palette.colors.primary);
+    const secondaryRgb = hexToRgb(palette.colors.secondary);
+    
+    const glowOpacity = isLight ? '0.08' : '0.15';
+    const glow1 = `rgba(${primaryRgb}, ${glowOpacity})`;
+    const glow2 = `rgba(${secondaryRgb}, ${glowOpacity})`;
+    
+    root.style.setProperty('--color-brand-dark', darkBgColor);
+    root.style.setProperty('--color-brand-card', cardColor);
+    root.style.setProperty('--color-brand-border', borderColor);
+    root.style.setProperty('--color-brand-primary', palette.colors.primary);
+    root.style.setProperty('--color-brand-secondary', palette.colors.secondary);
+    root.style.setProperty('--glow-color-1', glow1);
+    root.style.setProperty('--glow-color-2', glow2);
+  }, [themeMode, themePaletteId]);
 
   const [gameState, setGameState] = useState<GameState>('HOME');
   const [playerCount, setPlayerCount] = useState<number>(4);
@@ -718,8 +701,10 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
         confirmConfig,
         showConfirm,
         closeConfirm,
-        currentThemeId,
-        setCurrentThemeId,
+        themeMode,
+        setThemeMode,
+        themePaletteId,
+        setThemePaletteId,
       }}
     >
       {children}

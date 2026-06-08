@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useGame, THEMES } from '../context/GameContext';
+import { useGame, PALETTES } from '../context/GameContext';
 import { Home, HelpCircle, Volume2, VolumeX, User, Palette, Sun, Moon, Check } from 'lucide-react';
 import { playClick } from '../utils/sounds';
 
@@ -15,21 +15,17 @@ export const Header: React.FC<HeaderProps> = ({ showHelp = true }) => {
     soundEnabled, 
     setSoundEnabled, 
     showConfirm,
-    currentThemeId,
-    setCurrentThemeId
+    themeMode,
+    setThemeMode,
+    themePaletteId,
+    setThemePaletteId
   } = useGame();
 
   const [showThemePanel, setShowThemePanel] = useState(false);
 
-  const activeTheme = THEMES.find(t => t.id === currentThemeId) || THEMES[0];
-
   const handleModeToggle = (mode: 'light' | 'dark') => {
     playClick();
-    if (mode === 'light') {
-      setCurrentThemeId('light-pearl');
-    } else {
-      setCurrentThemeId('cyber');
-    }
+    setThemeMode(mode);
   };
 
   const handleHomeClick = () => {
@@ -159,7 +155,7 @@ export const Header: React.FC<HeaderProps> = ({ showHelp = true }) => {
               <button
                 onClick={() => handleModeToggle('dark')}
                 className={`flex-1 py-2 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 border transition-all cursor-pointer ${
-                  activeTheme.mode === 'dark'
+                  themeMode === 'dark'
                     ? 'bg-brand-primary border-brand-primary text-white shadow-md shadow-brand-primary/10'
                     : 'bg-white/5 border-white/10 text-slate-400 hover:text-slate-200'
                 }`}
@@ -170,7 +166,7 @@ export const Header: React.FC<HeaderProps> = ({ showHelp = true }) => {
               <button
                 onClick={() => handleModeToggle('light')}
                 className={`flex-1 py-2 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 border transition-all cursor-pointer ${
-                  activeTheme.mode === 'light'
+                  themeMode === 'light'
                     ? 'bg-brand-primary border-brand-primary text-white shadow-md shadow-brand-primary/10'
                     : 'bg-white/5 border-white/10 text-slate-400 hover:text-slate-200'
                 }`}
@@ -187,14 +183,14 @@ export const Header: React.FC<HeaderProps> = ({ showHelp = true }) => {
               Color Palette
             </span>
             <div className="grid grid-cols-2 gap-2">
-              {THEMES.map((t) => {
-                const isSelected = t.id === currentThemeId;
+              {PALETTES.map((t) => {
+                const isSelected = t.id === themePaletteId;
                 return (
                   <button
                     key={t.id}
                     onClick={() => {
                       playClick();
-                      setCurrentThemeId(t.id);
+                      setThemePaletteId(t.id);
                     }}
                     className={`flex items-center gap-2 p-2 rounded-xl border text-left transition-all cursor-pointer ${
                       isSelected
