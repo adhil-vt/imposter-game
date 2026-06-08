@@ -37,6 +37,108 @@ export interface GameHistoryItem {
   commonWord: string;
 }
 
+export interface Theme {
+  id: string;
+  name: string;
+  mode: 'dark' | 'light';
+  colors: {
+    primary: string;
+    secondary: string;
+    dark: string;
+    card: string;
+    border: string;
+    glow1: string;
+    glow2: string;
+  };
+}
+
+export const THEMES: Theme[] = [
+  {
+    id: 'cyber',
+    name: 'Cyberpunk',
+    mode: 'dark',
+    colors: {
+      primary: '#6366F1',
+      secondary: '#D946EF',
+      dark: '#080A16',
+      card: 'rgba(17, 24, 48, 0.55)',
+      border: 'rgba(255, 255, 255, 0.08)',
+      glow1: 'rgba(99, 102, 241, 0.15)',
+      glow2: 'rgba(217, 70, 239, 0.15)'
+    }
+  },
+  {
+    id: 'matrix',
+    name: 'Matrix Green',
+    mode: 'dark',
+    colors: {
+      primary: '#10B981',
+      secondary: '#3B82F6',
+      dark: '#050906',
+      card: 'rgba(10, 24, 15, 0.55)',
+      border: 'rgba(255, 255, 255, 0.06)',
+      glow1: 'rgba(16, 185, 129, 0.15)',
+      glow2: 'rgba(59, 130, 246, 0.15)'
+    }
+  },
+  {
+    id: 'crimson',
+    name: 'Gothic Crimson',
+    mode: 'dark',
+    colors: {
+      primary: '#EF4444',
+      secondary: '#F97316',
+      dark: '#0C0404',
+      card: 'rgba(28, 12, 12, 0.55)',
+      border: 'rgba(255, 255, 255, 0.06)',
+      glow1: 'rgba(239, 68, 68, 0.15)',
+      glow2: 'rgba(249, 115, 22, 0.15)'
+    }
+  },
+  {
+    id: 'light-pearl',
+    name: 'Pearl White',
+    mode: 'light',
+    colors: {
+      primary: '#4F46E5',
+      secondary: '#9333EA',
+      dark: '#F8FAFC',
+      card: 'rgba(255, 255, 255, 0.75)',
+      border: 'rgba(0, 0, 0, 0.08)',
+      glow1: 'rgba(79, 70, 229, 0.08)',
+      glow2: 'rgba(147, 51, 234, 0.08)'
+    }
+  },
+  {
+    id: 'light-mint',
+    name: 'Mint Fresh',
+    mode: 'light',
+    colors: {
+      primary: '#0D9488',
+      secondary: '#2563EB',
+      dark: '#F0FDFA',
+      card: 'rgba(255, 255, 255, 0.75)',
+      border: 'rgba(0, 0, 0, 0.08)',
+      glow1: 'rgba(13, 148, 136, 0.08)',
+      glow2: 'rgba(37, 99, 235, 0.08)'
+    }
+  },
+  {
+    id: 'light-sakura',
+    name: 'Sakura Pink',
+    mode: 'light',
+    colors: {
+      primary: '#E11D48',
+      secondary: '#D946EF',
+      dark: '#FFF1F2',
+      card: 'rgba(255, 255, 255, 0.75)',
+      border: 'rgba(0, 0, 0, 0.08)',
+      glow1: 'rgba(225, 29, 72, 0.08)',
+      glow2: 'rgba(217, 70, 239, 0.08)'
+    }
+  }
+];
+
 interface GameContextType {
   gameState: GameState;
   setGameState: (state: GameState) => void;
@@ -127,6 +229,8 @@ interface GameContextType {
     onConfirm: () => void;
   }) => void;
   closeConfirm: () => void;
+  currentThemeId: string;
+  setCurrentThemeId: (id: string) => void;
 }
 
 const GameContext = createContext<GameContextType | undefined>(undefined);
@@ -135,6 +239,28 @@ const GameContext = createContext<GameContextType | undefined>(undefined);
 export const AVATAR_POOL = ['🦊', '🐙', '🥑', '🚀', '👻', '🐨', '🦄', '🐼', '🦁', '🐸', '🍕', '🎮', '🎭', '💎', '🍿', '🦖'];
 
 export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const [currentThemeId, setCurrentThemeId] = useState<string>(() => {
+    const saved = localStorage.getItem('whoisfake_theme_id');
+    return saved || 'cyber';
+  });
+
+  useEffect(() => {
+    const theme = THEMES.find(t => t.id === currentThemeId) || THEMES[0];
+    localStorage.setItem('whoisfake_theme_id', currentThemeId);
+    
+    // Apply CSS variables dynamically
+    const root = document.documentElement;
+    root.setAttribute('data-mode', theme.mode);
+    
+    root.style.setProperty('--color-brand-dark', theme.colors.dark);
+    root.style.setProperty('--color-brand-card', theme.colors.card);
+    root.style.setProperty('--color-brand-border', theme.colors.border);
+    root.style.setProperty('--color-brand-primary', theme.colors.primary);
+    root.style.setProperty('--color-brand-secondary', theme.colors.secondary);
+    root.style.setProperty('--glow-color-1', theme.colors.glow1);
+    root.style.setProperty('--glow-color-2', theme.colors.glow2);
+  }, [currentThemeId]);
+
   const [gameState, setGameState] = useState<GameState>('HOME');
   const [playerCount, setPlayerCount] = useState<number>(4);
   const [selectedCategories, setSelectedCategories] = useState<CategoryKey[]>(() => {
@@ -592,6 +718,8 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
         confirmConfig,
         showConfirm,
         closeConfirm,
+        currentThemeId,
+        setCurrentThemeId,
       }}
     >
       {children}

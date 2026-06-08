@@ -1,13 +1,36 @@
-import React from 'react';
-import { useGame } from '../context/GameContext';
-import { Home, HelpCircle, Volume2, VolumeX, User } from 'lucide-react';
+import React, { useState } from 'react';
+import { useGame, THEMES } from '../context/GameContext';
+import { Home, HelpCircle, Volume2, VolumeX, User, Palette, Sun, Moon, Check } from 'lucide-react';
+import { playClick } from '../utils/sounds';
 
 interface HeaderProps {
   showHelp?: boolean;
 }
 
 export const Header: React.FC<HeaderProps> = ({ showHelp = true }) => {
-  const { gameState, setGameState, resetGame, soundEnabled, setSoundEnabled, showConfirm } = useGame();
+  const { 
+    gameState, 
+    setGameState, 
+    resetGame, 
+    soundEnabled, 
+    setSoundEnabled, 
+    showConfirm,
+    currentThemeId,
+    setCurrentThemeId
+  } = useGame();
+
+  const [showThemePanel, setShowThemePanel] = useState(false);
+
+  const activeTheme = THEMES.find(t => t.id === currentThemeId) || THEMES[0];
+
+  const handleModeToggle = (mode: 'light' | 'dark') => {
+    playClick();
+    if (mode === 'light') {
+      setCurrentThemeId('light-pearl');
+    } else {
+      setCurrentThemeId('cyber');
+    }
+  };
 
   const handleHomeClick = () => {
     if (gameState !== 'HOME' && gameState !== 'RULES') {
@@ -66,6 +89,20 @@ export const Header: React.FC<HeaderProps> = ({ showHelp = true }) => {
           {soundEnabled ? <Volume2 className="w-4 h-4 text-brand-primary" /> : <VolumeX className="w-4 h-4 text-brand-danger" />}
         </button>
 
+        {/* Theme Customizer Toggle */}
+        <button
+          onClick={() => {
+            playClick();
+            setShowThemePanel(!showThemePanel);
+          }}
+          className={`p-2.5 rounded-xl bg-white/5 border text-slate-400 hover:text-white hover:bg-white/10 transition-all duration-300 relative ${
+            showThemePanel ? 'border-brand-primary bg-white/10 text-white shadow-[0_0_10px_rgba(99,102,241,0.25)]' : 'border-white/10'
+          }`}
+          title="Themes & Styles"
+        >
+          <Palette className="w-4 h-4" />
+        </button>
+
         {gameState !== 'HOME' && (
           <button
             onClick={handleHomeClick}
@@ -96,6 +133,95 @@ export const Header: React.FC<HeaderProps> = ({ showHelp = true }) => {
           </button>
         )}
       </div>
+
+      {/* Floating Theme Customizer Panel */}
+      {showThemePanel && (
+        <div className="absolute right-6 top-20 z-50 w-72 p-5 rounded-3xl glass-panel border border-brand-primary/25 bg-brand-dark/95 shadow-2xl animate-scale-in">
+          <div className="flex justify-between items-center text-xs font-bold text-slate-400 uppercase tracking-widest mb-4">
+            <span>Appearance & Themes</span>
+            <button 
+              onClick={() => {
+                playClick();
+                setShowThemePanel(false);
+              }}
+              className="text-slate-400 hover:text-brand-danger transition-colors cursor-pointer"
+            >
+              Close
+            </button>
+          </div>
+
+          {/* Mode Switcher */}
+          <div className="flex flex-col gap-2 mb-5">
+            <span className="text-[10px] font-black text-slate-500 uppercase tracking-wider">
+              Mode
+            </span>
+            <div className="flex gap-2">
+              <button
+                onClick={() => handleModeToggle('dark')}
+                className={`flex-1 py-2 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 border transition-all cursor-pointer ${
+                  activeTheme.mode === 'dark'
+                    ? 'bg-brand-primary border-brand-primary text-white shadow-md shadow-brand-primary/10'
+                    : 'bg-white/5 border-white/10 text-slate-400 hover:text-slate-200'
+                }`}
+              >
+                <Moon className="w-3.5 h-3.5" />
+                Dark
+              </button>
+              <button
+                onClick={() => handleModeToggle('light')}
+                className={`flex-1 py-2 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 border transition-all cursor-pointer ${
+                  activeTheme.mode === 'light'
+                    ? 'bg-brand-primary border-brand-primary text-white shadow-md shadow-brand-primary/10'
+                    : 'bg-white/5 border-white/10 text-slate-400 hover:text-slate-200'
+                }`}
+              >
+                <Sun className="w-3.5 h-3.5" />
+                Light
+              </button>
+            </div>
+          </div>
+
+          {/* Palette List */}
+          <div className="flex flex-col gap-2.5">
+            <span className="text-[10px] font-black text-slate-500 uppercase tracking-wider">
+              Color Palette
+            </span>
+            <div className="grid grid-cols-2 gap-2">
+              {THEMES.map((t) => {
+                const isSelected = t.id === currentThemeId;
+                return (
+                  <button
+                    key={t.id}
+                    onClick={() => {
+                      playClick();
+                      setCurrentThemeId(t.id);
+                    }}
+                    className={`flex items-center gap-2 p-2 rounded-xl border text-left transition-all cursor-pointer ${
+                      isSelected
+                        ? 'bg-white/10 border-brand-primary text-white scale-[1.01]'
+                        : 'bg-white/5 border-white/10 text-slate-400 hover:bg-white/10 hover:text-slate-200'
+                    }`}
+                  >
+                    {/* Circle Color Dot */}
+                    <div className="flex w-6 h-6 rounded-full overflow-hidden border border-white/10 relative">
+                      <div className="w-1/2 h-full" style={{ backgroundColor: t.colors.primary }} />
+                      <div className="w-1/2 h-full" style={{ backgroundColor: t.colors.secondary }} />
+                      {isSelected && (
+                        <div className="absolute inset-0 flex items-center justify-center bg-black/30 backdrop-blur-[0.5px]">
+                          <Check className="w-3 h-3 text-white" />
+                        </div>
+                      )}
+                    </div>
+                    <span className="text-[11px] font-extrabold truncate w-full">
+                      {t.name}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      )}
     </header>
   );
 };
