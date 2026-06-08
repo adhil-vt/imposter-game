@@ -19,7 +19,7 @@ export const getSoundEffectsEnabled = () => {
  */
 const getAudioContext = (): AudioContext | null => {
   if (typeof window === 'undefined') return null;
-  const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
+  const AudioCtx = window.AudioContext || (window as typeof window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
   return AudioCtx ? new AudioCtx() : null;
 };
 

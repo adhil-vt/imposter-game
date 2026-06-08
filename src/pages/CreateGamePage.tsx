@@ -198,7 +198,7 @@ export const CreateGamePage: React.FC = () => {
                   key={level.key}
                   onClick={() => {
                     playClick();
-                    setDifficulty(level.key as any);
+                    setDifficulty(level.key as DifficultyKey);
                   }}
                   className={`flex flex-col items-center justify-between p-3 rounded-2xl border bg-gradient-to-b cursor-pointer select-none transition-all duration-300 min-h-[105px] ${
                     isActive 

@@ -1,3 +1,4 @@
+/* eslint-disable react-refresh/only-export-components */
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { getRandomWordPair } from '../data/words';
 import type { CategoryKey, WordPair, VisualAid, DifficultyKey } from '../data/words';
@@ -142,7 +143,9 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
       try {
         const parsed = JSON.parse(saved);
         if (Array.isArray(parsed) && parsed.length > 0) return parsed;
-      } catch (e) {}
+      } catch {
+        void 0;
+      }
     }
     return [
       'Animals', 'Food', 'Objects & Things', 'School & Learning', 'Silly & Random',
@@ -202,7 +205,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [customNames, setCustomNames] = useState<string[]>(() => {
     const saved = localStorage.getItem('impostor_saved_names');
     if (saved) {
-      try { return JSON.parse(saved); } catch (e) {}
+      try { return JSON.parse(saved); } catch { void 0; }
     }
     return Array(16).fill('').map((_, i) => `Player ${i + 1}`);
   });
@@ -210,7 +213,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [customAvatars, setCustomAvatars] = useState<string[]>(() => {
     const saved = localStorage.getItem('impostor_saved_avatars');
     if (saved) {
-      try { return JSON.parse(saved); } catch (e) {}
+      try { return JSON.parse(saved); } catch { void 0; }
     }
     return Array(16).fill(null).map((_, i) => AVATAR_POOL[i % AVATAR_POOL.length]);
   });
@@ -219,7 +222,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [customWordPairs, setCustomWordPairs] = useState<WordPair[]>(() => {
     const saved = localStorage.getItem('impostor_custom_word_pairs');
     if (saved) {
-      try { return JSON.parse(saved); } catch (e) {}
+      try { return JSON.parse(saved); } catch { void 0; }
     }
     return [];
   });
@@ -253,7 +256,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [stats, setStats] = useState<GameStats>(() => {
     const saved = localStorage.getItem('impostor_game_stats');
     if (saved) {
-      try { return JSON.parse(saved); } catch (e) {}
+      try { return JSON.parse(saved); } catch { void 0; }
     }
     return { gamesPlayed: 0, crewmateWins: 0, impostorWins: 0 };
   });
@@ -261,7 +264,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [history, setHistory] = useState<GameHistoryItem[]>(() => {
     const saved = localStorage.getItem('impostor_game_history');
     if (saved) {
-      try { return JSON.parse(saved); } catch (e) {}
+      try { return JSON.parse(saved); } catch { void 0; }
     }
     return [];
   });

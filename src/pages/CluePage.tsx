@@ -18,7 +18,7 @@ export const CluePage: React.FC = () => {
   // Timer states
   const [timerSeconds, setTimerSeconds] = useState<number>(30);
   const [timerActive, setTimerActive] = useState<boolean>(false);
-  const timerRef = useRef<any | null>(null);
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     if (timerActive && timerSeconds > 0) {
@@ -27,7 +27,11 @@ export const CluePage: React.FC = () => {
         playTick(); // Play ticking sound every second!
       }, 1000);
     } else if (timerSeconds === 0) {
-      setTimerActive(false);
+      if (timerActive) {
+        setTimeout(() => {
+          setTimerActive(false);
+        }, 0);
+      }
       playBuzzer(); // Play buzzer sound!
     }
 

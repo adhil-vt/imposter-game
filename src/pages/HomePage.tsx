@@ -49,7 +49,7 @@ export const HomePage: React.FC = () => {
     try {
       const date = new Date(timestamp);
       return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) + ' - ' + date.toLocaleDateString([], { month: 'short', day: 'numeric' });
-    } catch (e) {
+    } catch {
       return 'Recent Game';
     }
   };
