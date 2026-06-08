@@ -149,7 +149,7 @@ export const AboutPage: React.FC = () => {
             </a>
 
             <a 
-              href="mailto:adhilvt@example.com" 
+              href="mailto:adhilvt369@gmail.com" 
               className="py-3 px-3.5 rounded-xl bg-white/5 border border-white/10 hover:bg-white/10 text-slate-300 hover:text-white flex items-center justify-center transition-all duration-300 group"
               title="Send Email"
             >
