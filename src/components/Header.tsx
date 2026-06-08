@@ -32,10 +32,10 @@ export const Header: React.FC<HeaderProps> = ({ showHelp = true }) => {
         onClick={handleHomeClick}
       >
         <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-brand-primary to-brand-secondary flex items-center justify-center shadow-[0_0_15px_rgba(99,102,241,0.3)] group-hover:scale-105 transition-transform duration-300">
-          <span className="text-white font-extrabold text-lg tracking-wider">I</span>
+          <span className="text-white font-extrabold text-lg tracking-wider">W</span>
         </div>
         <h1 className="text-xl font-extrabold tracking-wider bg-clip-text text-transparent bg-gradient-to-r from-white via-slate-100 to-slate-300">
-          IMPOSTOR
+          WHOISFAKE
         </h1>
       </div>
 

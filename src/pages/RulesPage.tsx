@@ -20,7 +20,7 @@ export const RulesPage: React.FC = () => {
     {
       title: "The Concept",
       icon: <Users className="w-10 h-10" />,
-      content: "Impostor is a local party game for 3 to 12 players. Most players receive a common secret word, but one player (the Impostor) receives a different but closely related word.",
+      content: "WhoIsFake is a local party game for 3 to 12 players. Most players receive a common secret word, but one player (the Impostor) receives a different but closely related word.",
       badge: "Step 1 of 5",
       color: "from-blue-500 to-indigo-500",
     },
@@ -80,7 +80,7 @@ export const RulesPage: React.FC = () => {
           <h2 className="text-3xl font-black text-white tracking-wide">
             How to Play
           </h2>
-          <p className="text-sm text-slate-400 mt-1">Learn the ropes of Impostor</p>
+          <p className="text-sm text-slate-400 mt-1">Learn the ropes of WhoIsFake</p>
         </div>
 
         {/* Dynamic Carousel Slide */}

@@ -108,7 +108,7 @@ export const HomePage: React.FC = () => {
           </div>
           <div>
             <h1 className="text-5xl font-black tracking-wider text-white bg-clip-text bg-gradient-to-r from-white via-slate-200 to-slate-400">
-              IMPOSTOR
+              WHOISFAKE
             </h1>
             <p className="text-sm text-slate-400 mt-2 font-medium tracking-wide">
               The ultimate pass & play party game
