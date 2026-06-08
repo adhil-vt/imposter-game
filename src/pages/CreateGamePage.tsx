@@ -3,7 +3,7 @@ import { useGame, AVATAR_POOL } from '../context/GameContext';
 import { Button } from '../components/Button';
 import { Card } from '../components/Card';
 import { playClick } from '../utils/sounds';
-import type { CategoryKey } from '../data/words';
+import type { CategoryKey, DifficultyKey } from '../data/words';
 import { 
   Users, 
   Sparkles, 

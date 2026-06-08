@@ -8,7 +8,6 @@ import {
   BookOpen, 
   Calendar, 
   Mail, 
-  Github, 
   ChevronLeft, 
   Code2, 
   Sparkles,
@@ -112,7 +111,7 @@ export const AboutPage: React.FC = () => {
               rel="noopener noreferrer"
               className="flex-1 py-3 px-4 rounded-xl bg-white/5 border border-white/10 hover:bg-white/10 text-slate-300 hover:text-white flex items-center justify-center gap-2 transition-all duration-300 group"
             >
-              <Github className="w-4 h-4 text-slate-400 group-hover:text-white transition-colors" />
+              <Code2 className="w-4 h-4 text-slate-400 group-hover:text-white transition-colors" />
               <span className="text-xs font-bold">GitHub Profile</span>
             </a>
 
