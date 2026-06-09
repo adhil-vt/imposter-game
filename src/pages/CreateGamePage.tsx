@@ -77,7 +77,8 @@ export const CreateGamePage: React.FC = () => {
     isLobbyAdmin,
     mutedPlayerIds,
     chatMessages,
-    sendChatMessage
+    sendChatMessage,
+    unreadChatCount
   } = useGame();
 
   const [copied, setCopied] = useState(false);
@@ -89,11 +90,11 @@ export const CreateGamePage: React.FC = () => {
   
   const [selectedModerationPlayer, setSelectedModerationPlayer] = useState<any | null>(null);
   const [chatInput, setChatInput] = useState('');
-  const chatEndRef = useRef<HTMLDivElement>(null);
+  const chatContainerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    if (chatEndRef.current) {
-      chatEndRef.current.scrollIntoView({ behavior: 'smooth' });
+    if (chatContainerRef.current) {
+      chatContainerRef.current.scrollTop = chatContainerRef.current.scrollHeight;
     }
   }, [chatMessages]);
 
@@ -302,7 +303,7 @@ export const CreateGamePage: React.FC = () => {
       </div>
 
       {/* Messages list */}
-      <div className="flex-1 overflow-y-auto py-3 pr-1 flex flex-col gap-3 scrollbar-thin max-h-[190px]">
+      <div ref={chatContainerRef} className="flex-1 overflow-y-auto py-3 pr-1 flex flex-col gap-3 scrollbar-thin max-h-[190px]">
         {chatMessages.length === 0 ? (
           <div className="flex-1 flex flex-col items-center justify-center text-center opacity-40 p-4 select-none h-full">
             <MessageSquare className="w-8 h-8 text-slate-500 mb-2 stroke-[1.5]" />
@@ -359,7 +360,7 @@ export const CreateGamePage: React.FC = () => {
               );
             })
         )}
-        <div ref={chatEndRef} />
+        {/* Auto scrolled */}
       </div>
 
       {/* Form */}
@@ -872,6 +873,25 @@ export const CreateGamePage: React.FC = () => {
         )}
 
       </div>
+
+      {/* Mobile Floating Chat Shortcut Button */}
+      {isMultiplayer && (
+        <button
+          onClick={() => {
+            playClick();
+            document.getElementById('lobby-chat')?.scrollIntoView({ behavior: 'smooth' });
+          }}
+          className="fixed bottom-6 right-6 z-40 w-14 h-14 rounded-full bg-gradient-to-tr from-brand-secondary to-pink-600 border border-white/10 hover:scale-105 active:scale-95 transition-all shadow-lg flex items-center justify-center cursor-pointer glow-secondary select-none sm:hidden animate-fade-in-up"
+          title="Scroll to Chat"
+        >
+          <MessageSquare className="w-6 h-6 text-white" />
+          {unreadChatCount > 0 && (
+            <span className="absolute -top-1 -right-1 bg-brand-danger border border-brand-dark/20 text-white text-[10px] font-black w-5.5 h-5.5 rounded-full flex items-center justify-center shadow-lg animate-pulse">
+              {unreadChatCount}
+            </span>
+          )}
+        </button>
+      )}
 
       {/* Moderation Overlay popup */}
       {selectedModerationPlayer && (
