@@ -13,7 +13,7 @@ import { RulesPage } from './pages/RulesPage';
 import { AboutPage } from './pages/AboutPage';
 
 function GameContent() {
-  const { gameState } = useGame();
+  const { gameState, roomNotice } = useGame();
 
   const renderPage = () => {
     switch (gameState) {
@@ -47,6 +47,17 @@ function GameContent() {
       <main className="flex-1 w-full max-w-4xl mx-auto flex flex-col">
         {renderPage()}
       </main>
+
+      {roomNotice && (
+        <div className="fixed top-20 left-1/2 -translate-x-1/2 z-50 w-[calc(100%-2rem)] max-w-lg animate-fade-in-up">
+          <div className="glass-panel border-white/10 bg-brand-dark/95 shadow-2xl px-4 py-3 text-center">
+            <div className="flex items-center justify-center gap-2 text-sm font-bold text-slate-100">
+              <span className="w-2.5 h-2.5 rounded-full bg-brand-warning animate-pulse" />
+              {roomNotice.text}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Global Custom Cursor */}
       <CustomCursor />

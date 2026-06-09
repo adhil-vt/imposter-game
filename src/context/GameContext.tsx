@@ -242,6 +242,10 @@ interface GameContextType {
   banPlayer: (playerId: string) => void;
   transferHost: (playerId: string) => void;
   updatePlayerName: (newName: string) => void;
+  roomNotice: {
+    id: string;
+    text: string;
+  } | null;
 }
 
 const GameContext = createContext<GameContextType | undefined>(undefined);
@@ -489,12 +493,66 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
   const [isChatOpen, setIsChatOpen] = useState<boolean>(false);
   const [unreadChatCount, setUnreadChatCount] = useState<number>(0);
+  const [roomNotice, setRoomNotice] = useState<GameContextType['roomNotice']>(null);
+  const roomNoticeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const pushRoomNotice = (text: string) => {
+    if (roomNoticeTimerRef.current) {
+      clearTimeout(roomNoticeTimerRef.current);
+    }
+
+    const notice = {
+      id: `notice_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+      text,
+    };
+
+    setRoomNotice(notice);
+    roomNoticeTimerRef.current = setTimeout(() => {
+      setRoomNotice(null);
+    }, 4000);
+  };
 
   useEffect(() => {
     if (isChatOpen) {
       setUnreadChatCount(0);
     }
   }, [isChatOpen]);
+
+  useEffect(() => {
+    return () => {
+      if (roomNoticeTimerRef.current) {
+        clearTimeout(roomNoticeTimerRef.current);
+      }
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!isMultiplayer || gameState !== 'REVEAL' || players.length === 0) return;
+
+    if (playersWhoRevealed.length === players.length) {
+      setGameState('CLUES');
+      setTimerSeconds(30);
+      setTimerActive(false);
+      setActiveClueIndex(0);
+
+      if (isHost) {
+        multiplayer.send({
+          type: 'TIMER_SYNC',
+          activeClueIndex: 0,
+          timerSeconds: 30,
+          timerActive: false
+        });
+      }
+    }
+  }, [gameState, isMultiplayer, isHost, players.length, playersWhoRevealed.length]);
+
+  useEffect(() => {
+    if (!isMultiplayer || !isHost || gameState !== 'VOTING' || players.length === 0) return;
+
+    if (Object.keys(votes).length === players.length) {
+      tallyMultiplayerResults(votes);
+    }
+  }, [gameState, isHost, isMultiplayer, players.length, votes]);
 
   const sendChatMessage = (text: string) => {
     if (!text.trim()) return;
@@ -913,18 +971,6 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
               type: 'REVEAL_PROGRESS',
               revealedPlayers: next
             });
-            if (next.length === onlinePlayersRef.current.length) {
-              setGameState('CLUES');
-              setTimerSeconds(30);
-              setTimerActive(false);
-              setActiveClueIndex(0);
-              multiplayer.send({
-                type: 'TIMER_SYNC',
-                activeClueIndex: 0,
-                timerSeconds: 30,
-                timerActive: false
-              });
-            }
             return next;
           });
         }
@@ -996,21 +1042,27 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
         break;
 
       case 'CHAT':
+        let appended = false;
         setChatMessages(prev => {
           if (prev.some(m => m.id === msg.message.id)) return prev;
-          
+
+          appended = true;
           if (!isChatOpenRef.current && msg.message.senderId !== myPlayerIdRef.current) {
             setUnreadChatCount(c => c + 1);
             playNotification();
           } else if (msg.message.senderId !== myPlayerIdRef.current) {
             playNotification();
           }
-          
+
           return [...prev, msg.message];
         });
-        if (isHost) {
+        if (isHost && appended) {
           multiplayer.send(msg);
         }
+        break;
+
+      case 'ROOM_NOTICE':
+        pushRoomNotice(msg.text);
         break;
     }
   };
@@ -1048,10 +1100,12 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
 
     let disconnectedName = 'Someone';
+    let nextOnlinePlayers: NetworkPlayer[] = [];
     setOnlinePlayers(prev => {
       const p = prev.find(player => player.id === playerId);
       if (p) disconnectedName = p.name;
       const next = prev.filter(player => player.id !== playerId);
+      nextOnlinePlayers = next;
       multiplayer.send({
         type: 'LOBBY_UPDATE',
         players: next
@@ -1060,6 +1114,12 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
     });
 
     if (wasKicked) return;
+
+    const activeGameStates: GameState[] = ['REVEAL', 'CLUES', 'VOTING'];
+    const isActiveGame = activeGameStates.includes(gameState);
+    const leavingPlayer = players.find(player => player.id === playerId);
+    const leavingIsImpostor = leavingPlayer?.role === 'IMPOSTOR' || impostorId === playerId;
+    const remainingPlayers = nextOnlinePlayers.length;
 
     const systemMsg: ChatMessage = {
       id: `sys_${Date.now()}_${Math.random()}`,
@@ -1071,9 +1131,80 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
       isSystem: true
     };
     setChatMessages(prev => [...prev, systemMsg]);
+    pushRoomNotice(`${disconnectedName} left the room.`);
     multiplayer.send({
       type: 'CHAT',
       message: systemMsg
+    });
+    multiplayer.send({
+      type: 'ROOM_NOTICE',
+      text: `${disconnectedName} left the room.`
+    });
+
+    if (!isActiveGame) return;
+
+    const shouldEndGame = leavingIsImpostor || remainingPlayers < 3;
+    if (shouldEndGame) {
+      const endReason = leavingIsImpostor
+        ? `${disconnectedName} left the game. The impostor is gone, so the crewmates win.`
+        : `${disconnectedName} left the game. Not enough players remain to continue, so the crewmates win.`;
+
+      pushRoomNotice(endReason);
+      multiplayer.send({
+        type: 'ROOM_NOTICE',
+        text: endReason
+      });
+
+      setWinner('CREWMATES');
+      playWin();
+      setStats(prev => ({
+        gamesPlayed: prev.gamesPlayed + 1,
+        crewmateWins: prev.crewmateWins + 1,
+        impostorWins: prev.impostorWins,
+      }));
+
+      const activeImpostor = players.find(p => p.role === 'IMPOSTOR');
+      const counts: Record<string, number> = {};
+      players.forEach(p => {
+        counts[p.id] = 0;
+      });
+      setVoteStats(counts);
+      setVotes({});
+
+      const newHistoryItem: GameHistoryItem = {
+        id: `hist_${Date.now()}`,
+        timestamp: Date.now(),
+        category: chosenCategory,
+        playerCount: players.length,
+        winner: 'CREWMATES',
+        impostorName: activeImpostor?.name || 'Impostor',
+        impostorWord,
+        commonWord,
+      };
+      setHistory(prev => [newHistoryItem, ...prev].slice(0, 10));
+
+      setGameState('RESULTS');
+      multiplayer.send({
+        type: 'GAME_OVER',
+        winner: 'CREWMATES',
+        voteStats: counts,
+        votes: {}
+      });
+      return;
+    }
+
+    setPlayers(prev => prev.filter(player => player.id !== playerId));
+    setPlayerOrder(prev => prev.filter(id => id !== playerId));
+    setPlayersWhoRevealed(prev => prev.filter(id => id !== playerId));
+    setVotes(prev => {
+      const next = { ...prev };
+      delete next[playerId];
+      Object.keys(next).forEach(voterId => {
+        if (next[voterId] === playerId) {
+          delete next[voterId];
+        }
+      });
+      return next;
     });
   };
 
@@ -1691,6 +1822,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
         banPlayer,
         transferHost,
         updatePlayerName,
+        roomNotice,
       }}
     >
       {children}

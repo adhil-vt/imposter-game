@@ -18,37 +18,37 @@ export const RulesPage: React.FC = () => {
 
   const steps: RuleStep[] = [
     {
-      title: "The Concept",
+      title: "1. Set Up The Round",
       icon: <Users className="w-10 h-10" />,
-      content: "WhoIsFake is a local party game for 3 to 12 players. Most players receive a common secret word, but one player (the Impostor) receives a different but closely related word.",
+      content: "WhoIsFake works best with 3 to 12 players. The host picks a category, starts the round, and everyone gets a secret word. Most players share the same word, while the Impostor gets a different but related one.",
       badge: "Step 1 of 5",
       color: "from-blue-500 to-indigo-500",
     },
     {
-      title: "Secret Reveal",
+      title: "2. Reveal In Secret",
       icon: <Eye className="w-10 h-10" />,
-      content: "Pass the device around. Each player taps to reveal their word privately on the screen, memorizes it, hides it, and passes it to the next player until everyone knows their word.",
+      content: "Pass the device around and let each player reveal their card privately. Memorize the word, hide the card, and continue until everyone has seen their own word. In multiplayer, the round only moves on when every player is ready.",
       badge: "Step 2 of 5",
       color: "from-purple-500 to-pink-500",
     },
     {
-      title: "Give Clues",
+      title: "3. Speak One Clue",
       icon: <HelpCircle className="w-10 h-10" />,
-      content: "One by one, players give a single verbal clue about their word. The clue should be clever enough to signal to other crewmates that you know the word, but not so obvious that the Impostor guesses it!",
+      content: "Each player gives one short clue about their word. Be helpful enough that teammates know you are genuine, but not so obvious that the Impostor can instantly guess the answer.",
       badge: "Step 3 of 5",
       color: "from-amber-500 to-orange-500",
     },
     {
-      title: "Secret Voting",
+      title: "4. Vote Quietly",
       icon: <ShieldAlert className="w-10 h-10" />,
-      content: "After clues are given, pass the device around again to vote. Each player secretly votes for the person they suspect is the Impostor. Self-voting is not allowed.",
+      content: "After the discussion, vote for the player you think is the Impostor. Keep it secret, trust your instincts, and avoid self-voting.",
       badge: "Step 4 of 5",
       color: "from-red-500 to-rose-500",
     },
     {
-      title: "Reveal Winner",
+      title: "5. See Who Won",
       icon: <Award className="w-10 h-10" />,
-      content: "If the Impostor receives the absolute most votes, the Crewmates win! If there is a tie or someone else gets the most votes, the Impostor successfully escapes and wins!",
+      content: "If the Impostor gets the most votes, the Crewmates win. If the votes are split or the wrong player gets the lead, the Impostor escapes and wins the round.",
       badge: "Step 5 of 5",
       color: "from-emerald-500 to-teal-500",
     }
@@ -80,8 +80,19 @@ export const RulesPage: React.FC = () => {
           <h2 className="text-3xl font-black text-white tracking-wide">
             How to Play
           </h2>
-          <p className="text-sm text-slate-400 mt-1">Learn the ropes of WhoIsFake</p>
+          <p className="text-sm text-slate-400 mt-1">A quick guide to reveal, talk, and vote your way to victory</p>
         </div>
+
+        <Card className="p-4 border-white/5 bg-brand-card/45">
+          <div className="flex flex-wrap gap-2 justify-center text-[10px] font-black uppercase tracking-[0.22em] text-slate-400">
+            <span className="px-3 py-1 rounded-full bg-white/5 border border-white/10">Reveal</span>
+            <span className="px-3 py-1 rounded-full bg-white/5 border border-white/10">Discuss</span>
+            <span className="px-3 py-1 rounded-full bg-white/5 border border-white/10">Vote</span>
+          </div>
+          <p className="mt-3 text-center text-xs text-slate-400 leading-relaxed">
+            The game is simple: learn your word in private, share a smart clue, and use the group discussion to catch the Impostor before voting starts.
+          </p>
+        </Card>
 
         {/* Dynamic Carousel Slide */}
         <Card className="p-8 min-h-[340px] flex flex-col justify-between border-brand-primary/10 bg-brand-card/70 relative">

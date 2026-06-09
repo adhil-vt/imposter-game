@@ -22,6 +22,7 @@ export type NetworkMessage =
   | { type: 'STATE_CHANGE'; state: string }
   | { type: 'KICKED' }
   | { type: 'CHAT'; message: any }
+  | { type: 'ROOM_NOTICE'; text: string }
   | { type: 'SETTINGS_UPDATE'; difficulty: any; selectedCategories: any[]; impostorKnowsRole: boolean; randomizeOrder: boolean; hintsEnabled: boolean }
   | { type: 'TRANSFER_HOST'; newAdminId: string }
   | { type: 'KICK_REQUEST'; targetId: string }
@@ -33,6 +34,7 @@ export type NetworkMessage =
 class MultiplayerService {
   private peer: Peer | null = null;
   private connections: Record<string, DataConnection> = {};
+  private pendingMessages: Record<string, NetworkMessage[]> = {};
   private onMessageCallback: ((senderId: string, msg: NetworkMessage) => void) | null = null;
   private bannedIds: Set<string> = new Set();
 
@@ -53,6 +55,7 @@ class MultiplayerService {
   ): Promise<string> {
     this.isHost = true;
     this.connections = {};
+    this.pendingMessages = {};
     this.onMessageCallback = onMessage;
 
     this.roomCode = this.generateRoomCode();
@@ -80,6 +83,7 @@ class MultiplayerService {
         // Handle incoming connection from a guest player
         conn.on('open', () => {
           this.connections[conn.peer] = conn;
+          this.flushPendingMessages(conn.peer);
         });
 
         conn.on('data', (data: any) => {
@@ -139,6 +143,7 @@ class MultiplayerService {
         conn.on('open', () => {
           this.connections[hostPeerId] = conn;
           onStatusChange('connected');
+          this.flushPendingMessages(hostPeerId);
           
           // Instantly send JOIN message to host
           conn.send({
@@ -174,9 +179,11 @@ class MultiplayerService {
   // Broadcast message to all connected peers (Host only) or send directly to Host (Guest only)
   public send(msg: NetworkMessage) {
     if (this.isHost) {
-      Object.values(this.connections).forEach((conn) => {
+      Object.entries(this.connections).forEach(([peerId, conn]) => {
         if (conn.open) {
           conn.send(msg);
+        } else if (msg.type === 'CHAT') {
+          this.queuePendingMessage(peerId, msg);
         }
       });
     } else {
@@ -184,6 +191,8 @@ class MultiplayerService {
       const conn = this.connections[hostPeerId];
       if (conn && conn.open) {
         conn.send(msg);
+      } else if (msg.type === 'CHAT') {
+        this.queuePendingMessage(hostPeerId, msg);
       }
     }
   }
@@ -221,6 +230,7 @@ class MultiplayerService {
   public disconnect() {
     Object.values(this.connections).forEach((conn) => conn.close());
     this.connections = {};
+    this.pendingMessages = {};
     if (this.peer) {
       this.peer.destroy();
       this.peer = null;
@@ -229,6 +239,26 @@ class MultiplayerService {
     this.isHost = false;
     this.roomCode = '';
     this.myPeerId = '';
+  }
+
+  private queuePendingMessage(targetId: string, msg: NetworkMessage) {
+    if (!this.pendingMessages[targetId]) {
+      this.pendingMessages[targetId] = [];
+    }
+    const bucket = this.pendingMessages[targetId];
+    if (msg.type === 'CHAT' && bucket.some(existing => existing.type === 'CHAT' && (existing as any).message?.id === (msg as any).message?.id)) {
+      return;
+    }
+    bucket.push(msg);
+  }
+
+  private flushPendingMessages(targetId: string) {
+    const queued = this.pendingMessages[targetId];
+    const conn = this.connections[targetId];
+    if (!queued || !conn || !conn.open) return;
+
+    queued.forEach((msg) => conn.send(msg));
+    delete this.pendingMessages[targetId];
   }
 }
 
