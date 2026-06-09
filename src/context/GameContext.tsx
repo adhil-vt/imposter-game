@@ -7,8 +7,11 @@ import {
   playFlip, 
   playWin, 
   playLose, 
+  playTick,
+  playBuzzer,
   setSoundEffectsEnabled 
 } from '../utils/sounds';
+import { multiplayer, type NetworkPlayer, type NetworkMessage } from '../utils/multiplayer';
 
 export interface Player {
   id: string;
@@ -196,6 +199,24 @@ interface GameContextType {
   setThemeMode: (mode: 'light' | 'dark') => void;
   themePaletteId: string;
   setThemePaletteId: (id: string) => void;
+
+  // Multiplayer online state variables
+  isMultiplayer: boolean;
+  isHost: boolean;
+  roomCode: string;
+  myPlayerId: string;
+  multiplayerStatus: 'idle' | 'connecting' | 'connected' | 'disconnected' | 'error';
+  onlinePlayers: NetworkPlayer[];
+  playersWhoRevealed: string[];
+  activeClueIndex: number;
+  setActiveClueIndex: (idx: number) => void;
+  timerSeconds: number;
+  setTimerSeconds: (s: number) => void;
+  timerActive: boolean;
+  setTimerActive: (a: boolean) => void;
+  hostRoom: () => Promise<string>;
+  joinRoom: (code: string, name: string, avatar: string) => Promise<void>;
+  leaveRoom: () => void;
 }
 
 const GameContext = createContext<GameContextType | undefined>(undefined);
@@ -388,6 +409,317 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
     localStorage.setItem('impostor_game_history', JSON.stringify(history));
   }, [history]);
 
+  // Multiplayer online state variables
+  const [isMultiplayer, setIsMultiplayer] = useState<boolean>(false);
+  const [isHost, setIsHost] = useState<boolean>(false);
+  const [roomCode, setRoomCode] = useState<string>('');
+  const [myPlayerId, setMyPlayerId] = useState<string>('');
+  const [multiplayerStatus, setMultiplayerStatus] = useState<GameContextType['multiplayerStatus']>('idle');
+  const [onlinePlayers, setOnlinePlayers] = useState<NetworkPlayer[]>([]);
+  const [playersWhoRevealed, setPlayersWhoRevealed] = useState<string[]>([]);
+  const [activeClueIndex, setActiveClueIndex] = useState<number>(0);
+  const [timerSeconds, setTimerSeconds] = useState<number>(30);
+  const [timerActive, setTimerActive] = useState<boolean>(false);
+
+  // Play tick sound whenever timerSeconds ticks down in active state
+  useEffect(() => {
+    if (timerActive && timerSeconds > 0 && timerSeconds < 30) {
+      playTick();
+    }
+  }, [timerSeconds, timerActive]);
+
+  // Broadcast state change to guests when gameState changes on the host
+  useEffect(() => {
+    if (isMultiplayer && isHost) {
+      multiplayer.send({
+        type: 'STATE_CHANGE',
+        state: gameState
+      });
+    }
+  }, [gameState, isMultiplayer, isHost]);
+
+
+  // Clue Phase Timer countdown logic
+  useEffect(() => {
+    let timerRef: any = null;
+    if (timerActive && timerSeconds > 0 && (!isMultiplayer || isHost)) {
+      timerRef = setTimeout(() => {
+        setTimerSeconds(prev => {
+          const next = prev - 1;
+          if (isMultiplayer && isHost) {
+            multiplayer.send({
+              type: 'TIMER_SYNC',
+              activeClueIndex,
+              timerSeconds: next,
+              timerActive: true
+            });
+          }
+          return next;
+        });
+      }, 1000);
+    } else if (timerSeconds === 0 && timerActive && (!isMultiplayer || isHost)) {
+      setTimerActive(false);
+      if (isMultiplayer && isHost) {
+        multiplayer.send({
+          type: 'TIMER_SYNC',
+          activeClueIndex,
+          timerSeconds: 0,
+          timerActive: false
+        });
+      }
+      playBuzzer();
+    }
+
+    return () => {
+      if (timerRef) clearTimeout(timerRef);
+    };
+  }, [timerActive, timerSeconds, isMultiplayer, isHost, activeClueIndex]);
+
+  // Handle incoming network messages
+  const handleIncomingMessage = (_senderId: string, msg: NetworkMessage) => {
+    switch (msg.type) {
+      case 'LOBBY_UPDATE':
+        setOnlinePlayers(msg.players);
+        break;
+
+      case 'START_GAME':
+        setMyPlayerId(msg.myPlayerId);
+        setPlayers(msg.players);
+        setPlayerOrder(msg.playerOrder);
+        setCommonWord(msg.commonWord);
+        setImpostorWord(msg.impostorWord);
+        setChosenCategory(msg.chosenCategory);
+        setActiveWordPairHints(msg.activeWordPairHints);
+        setCommonVisual(msg.activePlayerVisualAid);
+        setImpostorVisual(msg.activePlayerVisualAid);
+
+        setCurrentRevealIndex(0);
+        setIsWordRevealed(false);
+        setPlayersWhoRevealed([]);
+        setCurrentVoterIndex(0);
+        setVotes({});
+        setWinner(null);
+        setVoteStats({});
+        setGameState('REVEAL');
+        break;
+
+      case 'REVEAL_COMPLETE':
+        if (isHost) {
+          setPlayersWhoRevealed(prev => {
+            const next = prev.includes(msg.playerId) ? prev : [...prev, msg.playerId];
+            if (next.length === onlinePlayers.length) {
+              setGameState('CLUES');
+              setTimerSeconds(30);
+              setTimerActive(false);
+              setActiveClueIndex(0);
+              multiplayer.send({
+                type: 'TIMER_SYNC',
+                activeClueIndex: 0,
+                timerSeconds: 30,
+                timerActive: false
+              });
+            }
+            return next;
+          });
+        }
+        break;
+
+      case 'TIMER_SYNC':
+        setActiveClueIndex(msg.activeClueIndex);
+        setTimerSeconds(msg.timerSeconds);
+        setTimerActive(msg.timerActive);
+        break;
+
+      case 'VOTE_CAST':
+        if (isHost) {
+          setVotes(prev => {
+            const next = { ...prev, [msg.voterId]: msg.votedId };
+            if (Object.keys(next).length === onlinePlayers.length) {
+              tallyMultiplayerResults(next);
+            }
+            return next;
+          });
+        }
+        break;
+
+      case 'GAME_OVER':
+        setWinner(msg.winner);
+        setVoteStats(msg.voteStats);
+        setVotes(msg.votes);
+        setGameState('RESULTS');
+        if (msg.winner === 'CREWMATES') {
+          playWin();
+        } else {
+          playLose();
+        }
+        break;
+
+      case 'PLAY_AGAIN':
+        setVotes({});
+        setPlayersWhoRevealed([]);
+        setWinner(null);
+        setVoteStats({});
+        setGameState('SETUP');
+        break;
+
+      case 'STATE_CHANGE':
+        setGameState(msg.state as GameState);
+        break;
+    }
+  };
+
+  const handlePlayerJoined = (player: NetworkPlayer) => {
+    setOnlinePlayers(prev => {
+      const next = prev.some(p => p.id === player.id) ? prev : [...prev, player];
+      multiplayer.send({
+        type: 'LOBBY_UPDATE',
+        players: next
+      });
+      return next;
+    });
+  };
+
+  const handlePlayerDisconnected = (playerId: string) => {
+    setOnlinePlayers(prev => {
+      const next = prev.filter(p => p.id !== playerId);
+      multiplayer.send({
+        type: 'LOBBY_UPDATE',
+        players: next
+      });
+      return next;
+    });
+  };
+
+  const hostRoom = async (): Promise<string> => {
+    setMultiplayerStatus('connecting');
+    try {
+      const code = await multiplayer.initHost(
+        handleIncomingMessage,
+        (status) => {
+          if (status === 'connected') setMultiplayerStatus('connected');
+          if (status === 'disconnected') setMultiplayerStatus('disconnected');
+          if (status === 'error') setMultiplayerStatus('error');
+        },
+        handlePlayerJoined,
+        handlePlayerDisconnected
+      );
+      setIsMultiplayer(true);
+      setIsHost(true);
+      setRoomCode(code);
+      const hostPlayer: NetworkPlayer = {
+        id: `host_${Date.now()}`,
+        name: customNames[0] || 'Host',
+        avatar: customAvatars[0] || '🦊',
+        isHost: true
+      };
+      setMyPlayerId(hostPlayer.id);
+      setOnlinePlayers([hostPlayer]);
+      setMultiplayerStatus('connected');
+      return code;
+    } catch (err) {
+      setMultiplayerStatus('error');
+      throw err;
+    }
+  };
+
+  const joinRoom = async (code: string, name: string, avatar: string): Promise<void> => {
+    setMultiplayerStatus('connecting');
+    try {
+      await multiplayer.initGuest(
+        code,
+        name,
+        avatar,
+        handleIncomingMessage,
+        (status) => {
+          if (status === 'connected') setMultiplayerStatus('connected');
+          if (status === 'disconnected') setMultiplayerStatus('disconnected');
+          if (status === 'error') setMultiplayerStatus('error');
+        }
+      );
+      setIsMultiplayer(true);
+      setIsHost(false);
+      setRoomCode(code);
+      setMultiplayerStatus('connected');
+    } catch (err) {
+      setMultiplayerStatus('error');
+      throw err;
+    }
+  };
+
+  const leaveRoom = () => {
+    multiplayer.disconnect();
+    setIsMultiplayer(false);
+    setIsHost(false);
+    setRoomCode('');
+    setMyPlayerId('');
+    setOnlinePlayers([]);
+    setPlayersWhoRevealed([]);
+    setMultiplayerStatus('idle');
+    setGameState('HOME');
+  };
+
+  const tallyMultiplayerResults = (finalVotes: Record<string, string>) => {
+    const counts: Record<string, number> = {};
+    players.forEach(p => {
+      counts[p.id] = 0;
+    });
+
+    Object.values(finalVotes).forEach(votedId => {
+      if (counts[votedId] !== undefined) {
+        counts[votedId]++;
+      }
+    });
+
+    setVoteStats(counts);
+
+    const impostorVoteCount = counts[impostorId] || 0;
+    
+    let isImpostorMostVoted = true;
+    for (const [playerId, count] of Object.entries(counts)) {
+      if (playerId !== impostorId && count >= impostorVoteCount) {
+        isImpostorMostVoted = false;
+        break;
+      }
+    }
+
+    const gameWinner = isImpostorMostVoted ? 'CREWMATES' : 'IMPOSTOR';
+    setWinner(gameWinner);
+
+    if (gameWinner === 'CREWMATES') {
+      playWin();
+    } else {
+      playLose();
+    }
+
+    setStats(prev => ({
+      gamesPlayed: prev.gamesPlayed + 1,
+      crewmateWins: prev.crewmateWins + (gameWinner === 'CREWMATES' ? 1 : 0),
+      impostorWins: prev.impostorWins + (gameWinner === 'IMPOSTOR' ? 1 : 0),
+    }));
+
+    const activeImpostor = players.find(p => p.role === 'IMPOSTOR');
+    const newHistoryItem: GameHistoryItem = {
+      id: `hist_${Date.now()}`,
+      timestamp: Date.now(),
+      category: chosenCategory,
+      playerCount: players.length,
+      winner: gameWinner,
+      impostorName: activeImpostor?.name || 'Impostor',
+      impostorWord,
+      commonWord,
+    };
+    setHistory(prev => [newHistoryItem, ...prev].slice(0, 10));
+
+    setGameState('RESULTS');
+
+    multiplayer.send({
+      type: 'GAME_OVER',
+      winner: gameWinner,
+      voteStats: counts,
+      votes: finalVotes
+    });
+  };
+
   // Confirm Modal state
   const [confirmConfig, setConfirmConfig] = useState<GameContextType['confirmConfig']>(null);
 
@@ -455,7 +787,8 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const startGame = () => {
     playClick();
     // 1. Select word pair
-    const { pair, chosenCategory: cat } = getRandomWordPair(selectedCategories, difficulty, customWordPairs);
+    const recentCommonWords = history.map(h => h.commonWord);
+    const { pair, chosenCategory: cat } = getRandomWordPair(selectedCategories, difficulty, customWordPairs, recentCommonWords);
     setCommonWord(pair.common);
     setImpostorWord(pair.impostor);
     setChosenCategory(cat);
@@ -467,47 +800,107 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const gamePlayers: Player[] = [];
     const ids: string[] = [];
     
-    // Choose random impostor index
-    const impostorIndex = Math.floor(Math.random() * playerCount);
-    let chosenImpostorId = '';
+    if (isMultiplayer) {
+      // Choose random impostor index from connected online players
+      const impostorIndex = Math.floor(Math.random() * onlinePlayers.length);
+      let chosenImpostorId = '';
 
-    for (let i = 0; i < playerCount; i++) {
-      const id = `player_${Date.now()}_${i}`;
-      ids.push(id);
-      
-      const name = customNames[i]?.trim() || `Player ${i + 1}`;
-      const avatar = customAvatars[i] || '🦊';
-      const isImpostor = i === impostorIndex;
-      
-      if (isImpostor) {
-        chosenImpostorId = id;
+      for (let i = 0; i < onlinePlayers.length; i++) {
+        const op = onlinePlayers[i];
+        const id = op.id;
+        ids.push(id);
+        
+        const isImpostor = i === impostorIndex;
+        if (isImpostor) {
+          chosenImpostorId = id;
+        }
+
+        gamePlayers.push({
+          id,
+          name: op.name,
+          avatar: op.avatar,
+          role: isImpostor ? 'IMPOSTOR' : 'CREWMATE',
+          word: isImpostor ? pair.impostor : pair.common,
+        });
       }
 
-      gamePlayers.push({
-        id,
-        name,
-        avatar,
-        role: isImpostor ? 'IMPOSTOR' : 'CREWMATE',
-        word: isImpostor ? pair.impostor : pair.common,
+      setPlayers(gamePlayers);
+      setImpostorId(chosenImpostorId);
+
+      let order = [...ids];
+      if (randomizeOrder) {
+        order = order.sort(() => Math.random() - 0.5);
+      }
+      setPlayerOrder(order);
+
+      setCurrentRevealIndex(0);
+      setIsWordRevealed(false);
+      setPlayersWhoRevealed([]);
+      setCurrentVoterIndex(0);
+      setVotes({});
+
+      // Broadcast start signal to guests
+      onlinePlayers.forEach((op) => {
+        const gp = gamePlayers.find((p) => p.id === op.id)!;
+        const visualAid = gp.role === 'IMPOSTOR' ? pair.impostorVisual : pair.commonVisual;
+        
+        if (op.id !== myPlayerId) {
+          multiplayer.sendTo(op.id, {
+            type: 'START_GAME',
+            myPlayerId: op.id,
+            players: gamePlayers,
+            playerOrder: order,
+            commonWord: pair.common,
+            impostorWord: pair.impostor,
+            chosenCategory: cat,
+            activeWordPairHints: pair.hints || [],
+            activePlayerVisualAid: visualAid
+          });
+        }
       });
+
+      setGameState('REVEAL');
+    } else {
+      // Local Pass & Play flow
+      const impostorIndex = Math.floor(Math.random() * playerCount);
+      let chosenImpostorId = '';
+
+      for (let i = 0; i < playerCount; i++) {
+        const id = `player_${Date.now()}_${i}`;
+        ids.push(id);
+        
+        const name = customNames[i]?.trim() || `Player ${i + 1}`;
+        const avatar = customAvatars[i] || '🦊';
+        const isImpostor = i === impostorIndex;
+        
+        if (isImpostor) {
+          chosenImpostorId = id;
+        }
+
+        gamePlayers.push({
+          id,
+          name,
+          avatar,
+          role: isImpostor ? 'IMPOSTOR' : 'CREWMATE',
+          word: isImpostor ? pair.impostor : pair.common,
+        });
+      }
+
+      setPlayers(gamePlayers);
+      setImpostorId(chosenImpostorId);
+
+      let order = [...ids];
+      if (randomizeOrder) {
+        order = order.sort(() => Math.random() - 0.5);
+      }
+      setPlayerOrder(order);
+
+      setCurrentRevealIndex(0);
+      setIsWordRevealed(false);
+      setCurrentVoterIndex(0);
+      setVotes({});
+      setGameState('REVEAL');
     }
-
-    setPlayers(gamePlayers);
-    setImpostorId(chosenImpostorId);
-
-    // 3. Set reveal order (can be randomized or sequential)
-    let order = [...ids];
-    if (randomizeOrder) {
-      order = order.sort(() => Math.random() - 0.5);
-    }
-    setPlayerOrder(order);
-
-    // Reset loop indicators
-    setCurrentRevealIndex(0);
-    setIsWordRevealed(false);
-    setCurrentVoterIndex(0);
-    setVotes({});
-    setGameState('REVEAL');
   };
 
   const revealWord = () => {
@@ -523,22 +916,68 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const nextReveal = () => {
     playClick();
     setIsWordRevealed(false);
-    if (currentRevealIndex < playerOrder.length - 1) {
-      setCurrentRevealIndex(prev => prev + 1);
+    if (isMultiplayer) {
+      // Notify host that I finished revealing
+      multiplayer.send({
+        type: 'REVEAL_COMPLETE',
+        playerId: myPlayerId
+      });
+      // Add local record if host
+      if (isHost) {
+        setPlayersWhoRevealed(prev => {
+          const next = prev.includes(myPlayerId) ? prev : [...prev, myPlayerId];
+          if (next.length === onlinePlayers.length) {
+            setGameState('CLUES');
+            setTimerSeconds(30);
+            setTimerActive(false);
+            setActiveClueIndex(0);
+            multiplayer.send({
+              type: 'TIMER_SYNC',
+              activeClueIndex: 0,
+              timerSeconds: 30,
+              timerActive: false
+            });
+          }
+          return next;
+        });
+      }
     } else {
-      setGameState('CLUES');
+      if (currentRevealIndex < playerOrder.length - 1) {
+        setCurrentRevealIndex(prev => prev + 1);
+      } else {
+        setGameState('CLUES');
+      }
     }
   };
 
   const submitVote = (votedId: string) => {
-    const voterId = playerOrder[currentVoterIndex];
-    const newVotes = { ...votes, [voterId]: votedId };
-    setVotes(newVotes);
-
-    if (currentVoterIndex < playerOrder.length - 1) {
-      setCurrentVoterIndex(prev => prev + 1);
+    if (isMultiplayer) {
+      if (isHost) {
+        setVotes(prev => {
+          const next = { ...prev, [myPlayerId]: votedId };
+          if (Object.keys(next).length === onlinePlayers.length) {
+            tallyMultiplayerResults(next);
+          }
+          return next;
+        });
+      } else {
+        setVotes({ [myPlayerId]: votedId });
+        multiplayer.send({
+          type: 'VOTE_CAST',
+          voterId: myPlayerId,
+          votedId
+        });
+      }
     } else {
-      tallyResults(newVotes);
+      const voterId = playerOrder[currentVoterIndex];
+      const newVotes = { ...votes, [voterId]: votedId };
+      setVotes(newVotes);
+
+      if (currentVoterIndex < playerOrder.length - 1) {
+        setCurrentVoterIndex(prev => prev + 1);
+      } else {
+        tallyResults(newVotes);
+      }
     }
   };
 
@@ -609,7 +1048,20 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const restartGame = () => {
     playClick();
-    startGame();
+    if (isMultiplayer) {
+      if (isHost) {
+        setVotes({});
+        setPlayersWhoRevealed([]);
+        setWinner(null);
+        setVoteStats({});
+        setGameState('SETUP');
+        multiplayer.send({
+          type: 'PLAY_AGAIN'
+        });
+      }
+    } else {
+      startGame();
+    }
   };
 
   const resetGame = () => {
@@ -705,6 +1157,22 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setThemeMode,
         themePaletteId,
         setThemePaletteId,
+        isMultiplayer,
+        isHost,
+        roomCode,
+        myPlayerId,
+        multiplayerStatus,
+        onlinePlayers,
+        playersWhoRevealed,
+        activeClueIndex,
+        setActiveClueIndex,
+        timerSeconds,
+        setTimerSeconds,
+        timerActive,
+        setTimerActive,
+        hostRoom,
+        joinRoom,
+        leaveRoom,
       }}
     >
       {children}

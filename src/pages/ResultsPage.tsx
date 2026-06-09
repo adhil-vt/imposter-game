@@ -17,6 +17,9 @@ export const ResultsPage: React.FC = () => {
     voteStats,
     restartGame,
     resetGame,
+    isMultiplayer,
+    isHost,
+    leaveRoom,
   } = useGame();
 
   const impostorPlayer = players.find(p => p.id === impostorId);
@@ -208,24 +211,35 @@ export const ResultsPage: React.FC = () => {
         </Card>
 
         {/* Controls */}
-        <div className="flex gap-4">
-          <Button 
-            variant="glass" 
-            onClick={resetGame} 
-            className="flex-1 py-4 rounded-2xl"
-          >
-            <PlusCircle className="w-5 h-5 mr-2" />
-            New Game
-          </Button>
+        <div className="flex flex-col gap-3 w-full">
+          {isMultiplayer && !isHost && (
+            <div className="text-center py-3 px-4 rounded-2xl bg-white/5 border border-white/5 text-slate-400 font-bold text-sm flex items-center justify-center gap-2 animate-pulse mb-2">
+              <RefreshCw className="w-4 h-4 animate-spin text-brand-primary" />
+              Waiting for Host to start next round...
+            </div>
+          )}
 
-          <Button 
-            variant="primary" 
-            onClick={restartGame} 
-            className="flex-[2] py-4 rounded-2xl font-bold"
-          >
-            <RefreshCw className="w-5 h-5 mr-2" />
-            Play Again
-          </Button>
+          <div className="flex gap-4 w-full">
+            <Button 
+              variant="glass" 
+              onClick={isMultiplayer ? leaveRoom : resetGame} 
+              className="flex-1 py-4 rounded-2xl font-bold text-sm"
+            >
+              <PlusCircle className="w-5 h-5 mr-2" />
+              {isMultiplayer ? 'Leave Room' : 'New Game'}
+            </Button>
+
+            {(!isMultiplayer || isHost) && (
+              <Button 
+                variant="primary" 
+                onClick={restartGame} 
+                className="flex-[2] py-4 rounded-2xl font-bold text-sm"
+              >
+                <RefreshCw className="w-5 h-5 mr-2" />
+                Play Again
+              </Button>
+            )}
+          </div>
         </div>
       </div>
     </div>

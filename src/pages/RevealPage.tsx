@@ -18,25 +18,36 @@ export const RevealPage: React.FC = () => {
     activeWordPairHints,
     activePlayerVisualAid,
     hintsEnabled,
+    isMultiplayer,
+    isHost,
+    myPlayerId,
+    playersWhoRevealed
   } = useGame();
 
-  // State to handle the "Pass device to Y" intermediary step
+  // State to handle the "Pass device to Y" intermediary step (offline only)
   const [passDeviceMode, setPassDeviceMode] = useState<boolean>(false);
+  const [hasCompletedReveal, setHasCompletedReveal] = useState<boolean>(false);
 
-  const activePlayerId = playerOrder[currentRevealIndex];
+  // If online multiplayer, display the current user's player card; otherwise display sequential active player card
+  const activePlayerId = isMultiplayer ? myPlayerId : playerOrder[currentRevealIndex];
   const activePlayer = players.find(p => p.id === activePlayerId);
   
-  const nextPlayerId = playerOrder[currentRevealIndex + 1];
-  const nextPlayer = players.find(p => p.id === nextPlayerId);
+  const nextPlayerId = isMultiplayer ? '' : playerOrder[currentRevealIndex + 1];
+  const nextPlayer = isMultiplayer ? null : players.find(p => p.id === nextPlayerId);
 
   if (!activePlayer) return null;
 
   const handleHideWord = () => {
     hideWord();
-    if (currentRevealIndex < playerOrder.length - 1) {
-      setPassDeviceMode(true);
-    } else {
+    if (isMultiplayer) {
+      setHasCompletedReveal(true);
       nextReveal();
+    } else {
+      if (currentRevealIndex < playerOrder.length - 1) {
+        setPassDeviceMode(true);
+      } else {
+        nextReveal();
+      }
     }
   };
 
@@ -48,8 +59,33 @@ export const RevealPage: React.FC = () => {
   const isImpostor = activePlayer.role === 'IMPOSTOR';
   const roleBadge = isImpostor && impostorKnowsRole ? 'IMPOSTOR' : undefined;
 
-  // 1. Render Intermediary "Pass Device" screen
-  if (passDeviceMode && nextPlayer) {
+  // 1. Render Multiplayer Waiting View
+  if (isMultiplayer && hasCompletedReveal) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[calc(100vh-80px)] px-6 py-6 text-center animate-fade-in">
+        <div className="ambient-glow-1 top-20 right-10 animate-float" />
+        <div className="w-full max-w-md flex flex-col gap-6 z-10">
+          <Card className="p-8 border-white/5 bg-brand-card/50">
+            <div className="w-16 h-16 rounded-full bg-brand-primary/10 border border-brand-primary/20 flex items-center justify-center text-3xl mx-auto mb-4 animate-bounce">
+              {activePlayer.avatar}
+            </div>
+            <h3 className="text-xl font-black text-white mb-2">Card Memorized!</h3>
+            <p className="text-xs text-slate-400">
+              Keep your word secret! Waiting for other players to finish viewing their cards...
+            </p>
+            {isHost && (
+              <div className="mt-6 pt-4 border-t border-white/5 text-[10px] text-slate-500 font-extrabold uppercase tracking-widest">
+                Progress: {playersWhoRevealed.length} / {players.length} Ready
+              </div>
+            )}
+          </Card>
+        </div>
+      </div>
+    );
+  }
+
+  // 2. Render Intermediary "Pass Device" screen (Offline Only)
+  if (!isMultiplayer && passDeviceMode && nextPlayer) {
     return (
       <div className="flex flex-col items-center justify-center min-h-[calc(100vh-80px)] px-6 py-6 text-center animate-fade-in">
         <div className="ambient-glow-1 top-20 right-10 animate-float" />

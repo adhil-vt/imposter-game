@@ -1,5 +1,5 @@
-import React from 'react';
-import { useGame } from '../context/GameContext';
+import React, { useState } from 'react';
+import { useGame, AVATAR_POOL } from '../context/GameContext';
 import { Button } from '../components/Button';
 import { Card } from '../components/Card';
 import { playClick } from '../utils/sounds';
@@ -13,7 +13,10 @@ import {
   Calendar,
   Layers,
   Lock,
-  CheckCircle2
+  CheckCircle2,
+  Users,
+  UserPlus,
+  Globe
 } from 'lucide-react';
 
 interface Achievement {
@@ -33,8 +36,18 @@ export const HomePage: React.FC = () => {
     clearStats, 
     history, 
     clearHistory,
-    showConfirm
+    showConfirm,
+    hostRoom,
+    joinRoom,
+    multiplayerStatus
   } = useGame();
+
+  const [isJoinModalOpen, setIsJoinModalOpen] = useState(false);
+  const [joinRoomCode, setJoinRoomCode] = useState('');
+  const [joinName, setJoinName] = useState('');
+  const [joinAvatar, setJoinAvatar] = useState(AVATAR_POOL[0]);
+  const [joinError, setJoinError] = useState('');
+  const [activeAvatarPicker, setActiveAvatarPicker] = useState(false);
 
   const winRate = stats.gamesPlayed > 0 
     ? Math.round((stats.crewmateWins / stats.gamesPlayed) * 100) 
@@ -43,6 +56,40 @@ export const HomePage: React.FC = () => {
   const handleRulesClick = () => {
     playClick();
     setGameState('RULES');
+  };
+
+  const handleHostClick = async () => {
+    playClick();
+    try {
+      await hostRoom();
+      setGameState('SETUP');
+    } catch (err: any) {
+      console.error(err);
+      alert('Failed to host room: ' + err.message);
+    }
+  };
+
+  const handleJoinSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    playClick();
+    setJoinError('');
+
+    if (!joinRoomCode.trim()) {
+      setJoinError('Room code is required!');
+      return;
+    }
+    if (!joinName.trim()) {
+      setJoinError('Player name is required!');
+      return;
+    }
+
+    try {
+      await joinRoom(joinRoomCode.trim(), joinName.trim(), joinAvatar);
+      setIsJoinModalOpen(false);
+      setGameState('SETUP');
+    } catch (err: any) {
+      setJoinError(err.message || 'Failed to connect to room. Check the code.');
+    }
   };
 
   const formatTime = (timestamp: number) => {
@@ -111,35 +158,154 @@ export const HomePage: React.FC = () => {
               WHOISFAKE
             </h1>
             <p className="text-sm text-slate-400 mt-2 font-medium tracking-wide">
-              The ultimate pass & play party game
+              The ultimate party game &bull; Offline & Online
             </p>
           </div>
         </div>
 
         {/* Buttons Menu */}
-        <Card className="flex flex-col gap-4 p-6 border-brand-primary/10">
+        <Card className="flex flex-col gap-3 p-6 border-brand-primary/10">
           <Button 
             variant="primary" 
             size="lg" 
             fullWidth 
             onClick={initiateSetup}
-            className="group py-4 rounded-2xl"
+            className="group py-3.5 rounded-2xl font-bold"
           >
             <Play className="w-5 h-5 mr-2 group-hover:scale-110 transition-transform" />
-            New Game
+            Pass & Play (Offline)
           </Button>
+
+          <div className="grid grid-cols-2 gap-3">
+            <Button 
+              variant="secondary" 
+              size="md" 
+              onClick={handleHostClick}
+              disabled={multiplayerStatus === 'connecting'}
+              className="py-3 rounded-2xl text-xs font-black bg-brand-primary/15 border border-brand-primary/30 text-slate-200"
+            >
+              <Users className="w-4 h-4 mr-1.5 text-brand-primary" />
+              Host Online
+            </Button>
+            <Button 
+              variant="secondary" 
+              size="md" 
+              onClick={() => {
+                playClick();
+                setIsJoinModalOpen(true);
+              }}
+              className="py-3 rounded-2xl text-xs font-black bg-brand-secondary/15 border border-brand-secondary/30 text-slate-200"
+            >
+              <UserPlus className="w-4 h-4 mr-1.5 text-brand-secondary" />
+              Join Room
+            </Button>
+          </div>
 
           <Button 
             variant="glass" 
             size="lg" 
             fullWidth 
             onClick={handleRulesClick}
-            className="group py-4 rounded-2xl"
+            className="group py-3.5 rounded-2xl font-bold"
           >
             <BookOpen className="w-5 h-5 mr-2 text-brand-secondary group-hover:scale-110 transition-transform" />
             How to Play
           </Button>
         </Card>
+
+        {/* Join Modal Overlay */}
+        {isJoinModalOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-brand-dark/85 backdrop-blur-sm animate-fade-in">
+            <div className="w-full max-w-sm rounded-3xl border border-white/10 bg-brand-card p-6 shadow-2xl animate-scale-in">
+              <div className="flex justify-between items-center mb-4 pb-3 border-b border-white/5">
+                <h3 className="text-lg font-black text-white flex items-center gap-2">
+                  <Globe className="w-5 h-5 text-brand-secondary animate-pulse" />
+                  Join Online Room
+                </h3>
+                <button 
+                  onClick={() => setIsJoinModalOpen(false)}
+                  className="text-slate-400 hover:text-white text-xl p-1"
+                >
+                  &times;
+                </button>
+              </div>
+
+              <form onSubmit={handleJoinSubmit} className="flex flex-col gap-4">
+                <div className="flex flex-col gap-1">
+                  <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wide">5-Digit Room Code</span>
+                  <input
+                    type="text"
+                    maxLength={5}
+                    placeholder="e.g. 18462"
+                    value={joinRoomCode}
+                    onChange={(e) => setJoinRoomCode(e.target.value.replace(/\D/g, ''))}
+                    className="bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-sm font-bold text-slate-200 focus:outline-none focus:border-brand-secondary"
+                  />
+                </div>
+
+                <div className="flex flex-col gap-1">
+                  <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wide">Your Screen Name</span>
+                  <input
+                    type="text"
+                    maxLength={14}
+                    placeholder="Enter name"
+                    value={joinName}
+                    onChange={(e) => setJoinName(e.target.value)}
+                    className="bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-sm font-bold text-slate-200 focus:outline-none focus:border-brand-primary"
+                  />
+                </div>
+
+                <div className="flex flex-col gap-1 relative">
+                  <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wide">Select Avatar</span>
+                  <button
+                    type="button"
+                    onClick={() => setActiveAvatarPicker(!activeAvatarPicker)}
+                    className="w-full py-2.5 bg-white/5 border border-white/10 hover:bg-white/10 rounded-xl text-lg flex items-center justify-center gap-2"
+                  >
+                    <span>{joinAvatar}</span>
+                    <span className="text-xs text-slate-500 font-semibold">(Change)</span>
+                  </button>
+
+                  {activeAvatarPicker && (
+                    <div className="absolute top-16 left-0 right-0 z-40 p-3 rounded-2xl border border-brand-primary/20 bg-brand-dark shadow-2xl">
+                      <div className="grid grid-cols-6 gap-1.5 max-h-[100px] overflow-y-auto">
+                        {AVATAR_POOL.map(emoji => (
+                          <button
+                            key={emoji}
+                            type="button"
+                            onClick={() => {
+                              setJoinAvatar(emoji);
+                              setActiveAvatarPicker(false);
+                            }}
+                            className={`w-8 h-8 flex items-center justify-center text-lg rounded-lg hover:bg-white/10 ${
+                              joinAvatar === emoji ? 'bg-brand-primary/20' : ''
+                            }`}
+                          >
+                            {emoji}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {joinError && (
+                  <span className="text-xs text-brand-danger font-semibold">{joinError}</span>
+                )}
+
+                <Button
+                  variant="primary"
+                  type="submit"
+                  fullWidth
+                  disabled={multiplayerStatus === 'connecting'}
+                  className="py-3 rounded-xl font-bold"
+                >
+                  {multiplayerStatus === 'connecting' ? 'Connecting...' : 'Connect to Room'}
+                </Button>
+              </form>
+            </div>
+          </div>
+        )}
 
         {/* Statistics Board */}
         {stats.gamesPlayed > 0 && (

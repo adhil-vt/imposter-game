@@ -329,6 +329,24 @@ export const wordDatabase: Record<Exclude<CategoryKey, 'Mixed' | 'Custom'>, Word
       commonVisual: { emojis: '🥄🥄🥣', description: 'A metallic utensil with a shallow oval bowl, used for scooping soups and cereals.' },
       impostorVisual: { emojis: '🍴🍽️🍴', description: 'A metallic table utensil with three or four sharp tines used to spear food.' },
       difficulty: 'medium'
+    },
+    {
+      common: 'Telescope', impostor: 'Binoculars', hints: ['Optics', 'Lenses', 'Viewing'],
+      commonVisual: { emojis: '🔭🌌🪐', description: 'A long single optical tube on a tripod used to view distant planets and stars.' },
+      impostorVisual: { emojis: '🔭🌲🦅', description: 'A portable dual-eyepiece viewing device held in two hands, used for birdwatching.' },
+      difficulty: 'medium'
+    },
+    {
+      common: 'Hammer', impostor: 'Mallet', hints: ['Tool', 'Construction', 'Strikers'],
+      commonVisual: { emojis: '🔨🧱🛠️', description: 'A heavy metal-headed tool used to drive steel nails into wood.' },
+      impostorVisual: { emojis: '🔨🪵🎪', description: 'A wooden or rubber-headed hammer used to strike chisels or tent pegs without damage.' },
+      difficulty: 'medium'
+    },
+    {
+      common: 'Cup', impostor: 'Mug', hints: ['Drinkware', 'Container', 'Table'],
+      commonVisual: { emojis: '🥛🥛🥤', description: 'A small cylindrical container for drinking water or juices, usually without a handle.' },
+      impostorVisual: { emojis: '☕☕☕', description: 'A thick ceramic drinking vessel with a loop handle, used for hot coffee or tea.' },
+      difficulty: 'easy'
     }
   ],
   'School & Learning': [
@@ -379,6 +397,24 @@ export const wordDatabase: Record<Exclude<CategoryKey, 'Mixed' | 'Custom'>, Word
       commonVisual: { emojis: '🧮📟🔢', description: 'An electronic pocket device with buttons and screen, used to solve arithmetic.' },
       impostorVisual: { emojis: '🧮🧮🪵', description: 'An ancient counting frame fitted with wooden beads sliding on wires.' },
       difficulty: 'hard'
+    },
+    {
+      common: 'Knowledge', impostor: 'Ignorance', hints: ['Mind', 'Intellect', 'State'],
+      commonVisual: { emojis: '📖💡🧠', description: 'The state of understanding and possessing information, facts, and skills.' },
+      impostorVisual: { emojis: '🙈🌫️❓', description: 'A state of being uninformed, unaware, or lacking education.' },
+      difficulty: 'hard'
+    },
+    {
+      common: 'Fact', impostor: 'Opinion', hints: ['Statement', 'Truth', 'Belief'],
+      commonVisual: { emojis: '📊✅🔬', description: 'A statement or piece of information that can be verified and proven true.' },
+      impostorVisual: { emojis: '🗣️💭❓', description: 'A personal belief, view, or judgment that is not necessarily based on proof.' },
+      difficulty: 'easy'
+    },
+    {
+      common: 'Encyclopedia', impostor: 'Dictionary', hints: ['Book', 'Reference', 'Definitions'],
+      commonVisual: { emojis: '📚🏛️🔍', description: 'A comprehensive reference book containing detailed articles on a wide range of subjects.' },
+      impostorVisual: { emojis: '📖✍️🔤', description: 'A reference book listing words alphabetically with their meanings and pronunciations.' },
+      difficulty: 'medium'
     }
   ],
   'Silly & Random': [
@@ -428,6 +464,30 @@ export const wordDatabase: Record<Exclude<CategoryKey, 'Mixed' | 'Custom'>, Word
       common: 'Mustache', impostor: 'Beard', hints: ['Facial Hair', 'Grooming', 'Barber'],
       commonVisual: { emojis: '🥸🧔🥸', description: 'Facial hair styled exclusively above the upper lip.' },
       impostorVisual: { emojis: '🧔🧔🧔', description: 'Full facial hair covering the chin, jawlines, and cheeks.' },
+      difficulty: 'medium'
+    },
+    {
+      common: 'Famous', impostor: 'Unknown', hints: ['Reputation', 'Status', 'People'],
+      commonVisual: { emojis: '🌟📸🎤', description: 'A widely recognized public figure, celebrity, or superstar.' },
+      impostorVisual: { emojis: '👤🎭❓', description: 'An anonymous stranger, hidden figure, or obscure entity.' },
+      difficulty: 'easy'
+    },
+    {
+      common: 'Known', impostor: 'Unknown', hints: ['Information', 'Status', 'Certainty'],
+      commonVisual: { emojis: '📖✅🧐', description: 'A verified truth, confirmed information, or familiar territory.' },
+      impostorVisual: { emojis: '❓🌫️🌀', description: 'An unsolved mystery, blank space, or complete enigma.' },
+      difficulty: 'medium'
+    },
+    {
+      common: 'Recognized', impostor: 'Unidentified', hints: ['Identification', 'Security', 'Status'],
+      commonVisual: { emojis: '🔍🪪👮', description: 'A clearly identified and cataloged object or person.' },
+      impostorVisual: { emojis: '🛸🌫️👤', description: 'An object or stranger whose origin or identity cannot be determined.' },
+      difficulty: 'hard'
+    },
+    {
+      common: 'Secret', impostor: 'Rumor', hints: ['Information', 'Truth', 'Whisper'],
+      commonVisual: { emojis: '🤫🔒🤐', description: 'Private information meant to be kept hidden from others.' },
+      impostorVisual: { emojis: '🗣️🌀📻', description: 'A currently circulating story or report of unverified truth.' },
       difficulty: 'medium'
     }
   ],
@@ -723,6 +783,24 @@ export const wordDatabase: Record<Exclude<CategoryKey, 'Mixed' | 'Custom'>, Word
       commonVisual: { emojis: '🥁🥁🥁', description: 'A hollow cylinder with a stretched membrane, beaten with wooden sticks.' },
       impostorVisual: { emojis: '🪇🔔🪇', description: 'A wooden ring fitted with metal jingling discs, shaken or struck with the palm.' },
       difficulty: 'hard'
+    },
+    {
+      common: 'Violin', impostor: 'Cello', hints: ['Instrument', 'Strings', 'Classical'],
+      commonVisual: { emojis: '🎻🎻🎻', description: 'A small high-pitched stringed instrument tucked under the chin and played with a bow.' },
+      impostorVisual: { emojis: '🎻🎼🏛️', description: 'A large, low-pitched stringed instrument held between the knees while sitting.' },
+      difficulty: 'hard'
+    },
+    {
+      common: 'Flute', impostor: 'Clarinet', hints: ['Instrument', 'Woodwind', 'Orchestra'],
+      commonVisual: { emojis: '🎶🌬️💨', description: 'A silver metal woodwind instrument held horizontally, played by blowing across an open embouchure.' },
+      impostorVisual: { emojis: '🎷🎹🎼', description: 'A dark wooden reed instrument held vertically, played with a single reed mouthpiece.' },
+      difficulty: 'hard'
+    },
+    {
+      common: 'Hip Hop', impostor: 'Reggae', hints: ['Genre', 'Music', 'Rhythm'],
+      commonVisual: { emojis: '🎤🎧🔥', description: 'A high-energy music genre characterized by rapping over heavy electronic drum beats.' },
+      impostorVisual: { emojis: '🇯🇲🌴🎸', description: 'A laid-back, syncopated Jamaican music style with prominent offbeat basslines.' },
+      difficulty: 'medium'
     }
   ],
   'Sports & Games': [
@@ -773,6 +851,24 @@ export const wordDatabase: Record<Exclude<CategoryKey, 'Mixed' | 'Custom'>, Word
       commonVisual: { emojis: '🛹🛹🛹', description: 'A wooden board fitted with four wheels, propelled by pushing with one foot.' },
       impostorVisual: { emojis: '🛼🛼🛼', description: 'Boots equipped with a single inline row of wheels underneath.' },
       difficulty: 'medium'
+    },
+    {
+      common: 'Table Tennis', impostor: 'Tennis', hints: ['Racket', 'Ball Game', 'Net'],
+      commonVisual: { emojis: '🏓🏓🏓', description: 'A fast game played with small wooden paddles and a hollow plastic ball on a table.' },
+      impostorVisual: { emojis: '🎾🎾🎾', description: 'A game played with stringed rackets and bouncy neon-yellow balls on a large open court.' },
+      difficulty: 'medium'
+    },
+    {
+      common: 'Rugby', impostor: 'American Football', hints: ['Team Sport', 'Oval Ball', 'Contact'],
+      commonVisual: { emojis: '🏉🏉🏃', description: 'A continuous full-contact sport played without pads or helmets, featuring lateral passes.' },
+      impostorVisual: { emojis: '🏈🏈🛡️', description: 'A strategic stop-and-start sport where players wear helmets and pads, throwing forward passes.' },
+      difficulty: 'hard'
+    },
+    {
+      common: 'Monopoly', impostor: 'Scrabble', hints: ['Board Game', 'Tabletop', 'Leisure'],
+      commonVisual: { emojis: '🎲🏠🪙', description: 'A classic board game about buying properties, building houses, and collecting rent.' },
+      impostorVisual: { emojis: '🔤📝🧩', description: 'A word-building board game where players score points by placing letter tiles on a grid.' },
+      difficulty: 'easy'
     }
   ],
   'Technology & Gadgets': [
@@ -896,6 +992,12 @@ export const wordDatabase: Record<Exclude<CategoryKey, 'Mixed' | 'Custom'>, Word
       impostorVisual: { emojis: '💾⚙️⚡', description: 'A solid-state storage chip with no moving parts, offering high-speed memory read/writes.' },
       difficulty: 'hard'
     },
+    {
+      common: 'Known Bug', impostor: 'Unknown Error', hints: ['Debugging', 'Software', 'Coding'],
+      commonVisual: { emojis: '🐛📝⚙️', description: 'A documented, tracked software defect with a planned fix.' },
+      impostorVisual: { emojis: '❌❓💣', description: 'An unexpected crash or silent bug with no error log or trace.' },
+      difficulty: 'hard'
+    }
   ],
   'Nature & Outdoors': [
     {
@@ -1044,6 +1146,18 @@ export const wordDatabase: Record<Exclude<CategoryKey, 'Mixed' | 'Custom'>, Word
       common: 'Love', impostor: 'Friendship', hints: ['Feeling', 'Relationship', 'Heart'],
       commonVisual: { emojis: '❤️💖👩‍❤️‍👨', description: 'An intense, deep affection and romantic bond between individuals.' },
       impostorVisual: { emojis: '🤝👦👧', description: 'A mutual bond of trust, support, and shared fun between peers.' },
+      difficulty: 'medium'
+    },
+    {
+      common: 'Certainty', impostor: 'Uncertainty', hints: ['Mindset', 'Confidence', 'Doubt'],
+      commonVisual: { emojis: '🎯☀️💪', description: 'Absolute confidence, conviction, or lack of doubt about a situation.' },
+      impostorVisual: { emojis: '🌫️🤔❓', description: 'A state of doubt, hesitation, or unpredictable outcomes.' },
+      difficulty: 'hard'
+    },
+    {
+      common: 'Curiosity', impostor: 'Indifference', hints: ['Interest', 'State of Mind', 'Attitude'],
+      commonVisual: { emojis: '🧐🔍💡', description: 'A strong desire to know, learn, explore, and understand new things.' },
+      impostorVisual: { emojis: '🥱🤷‍♂️🕳️', description: 'Complete lack of interest, concern, or enthusiasm about everything.' },
       difficulty: 'medium'
     }
   ],
@@ -1295,6 +1409,24 @@ export const wordDatabase: Record<Exclude<CategoryKey, 'Mixed' | 'Custom'>, Word
       commonVisual: { emojis: '👺🪙🎒', description: 'A small, greedy green-skinned fantasy creature obsessed with stealing gold coins.' },
       impostorVisual: { emojis: '👹👹🪓', description: 'A large, muscular green warrior race with tusks, carrying huge axes.' },
       difficulty: 'hard'
+    },
+    {
+      common: 'Centaur', impostor: 'Minotaur', hints: ['Creature', 'Mythology', 'Hybrid'],
+      commonVisual: { emojis: '🏹🐴🐎', description: 'A mythical hybrid creature with the upper body of a human and the lower body of a horse.' },
+      impostorVisual: { emojis: '🐂🪓🌀', description: 'A legendary hybrid monster with the body of a strong man and the head of a bull.' },
+      difficulty: 'medium'
+    },
+    {
+      common: 'Kraken', impostor: 'Leviathan', hints: ['Beast', 'Ocean', 'Monster'],
+      commonVisual: { emojis: '🐙🚢🌊', description: 'A legendary colossal sea monster with massive tentacles, known for pulling ships underwater.' },
+      impostorVisual: { emojis: '🐉🐋🌊', description: 'A gigantic mythical sea dragon or serpent described in ancient biblical lore.' },
+      difficulty: 'hard'
+    },
+    {
+      common: 'Gargoyle', impostor: 'Golem', hints: ['Creature', 'Stone', 'Protector'],
+      commonVisual: { emojis: '🧌🏛️🦇', description: 'A carved stone creature perched on Gothic roofs, acting as a decorative water spout.' },
+      impostorVisual: { emojis: '🤖🪨📜', description: 'An animated clay or stone helper brought to life by writing a magical word on its forehead.' },
+      difficulty: 'hard'
     }
   ]
 };
@@ -1307,7 +1439,8 @@ export const wordDatabase: Record<Exclude<CategoryKey, 'Mixed' | 'Custom'>, Word
 export function getRandomWordPair(
   categories: CategoryKey | CategoryKey[],
   difficulty: DifficultyKey = 'medium',
-  customPool: WordPair[] = []
+  customPool: WordPair[] = [],
+  recentCommonWords: string[] = []
 ): { pair: WordPair; chosenCategory: Exclude<CategoryKey, 'Mixed'> } {
   
   // Convert to array if it is a single item
@@ -1330,8 +1463,11 @@ export function getRandomWordPair(
 
   if (chosenCategory === 'Custom') {
     if (customPool.length > 0) {
-      const randomIndex = Math.floor(Math.random() * customPool.length);
-      return { pair: customPool[randomIndex], chosenCategory: 'Custom' };
+      // Filter custom pool by recent words if possible
+      let freshCustom = customPool.filter(pair => !recentCommonWords.includes(pair.common));
+      if (freshCustom.length === 0) freshCustom = customPool;
+      const randomIndex = Math.floor(Math.random() * freshCustom.length);
+      return { pair: freshCustom[randomIndex], chosenCategory: 'Custom' };
     }
     // Fallback if custom pool is empty
     return { 
@@ -1357,7 +1493,14 @@ export function getRandomWordPair(
     filteredList = list;
   }
 
-  const randomIndex = Math.floor(Math.random() * filteredList.length);
-  return { pair: filteredList[randomIndex], chosenCategory: chosenCategory as Exclude<CategoryKey, 'Mixed'> };
+  // Filter out recently played words
+  let freshList = filteredList.filter(pair => !recentCommonWords.includes(pair.common));
+  if (freshList.length === 0) {
+    // If all words in this category/difficulty were recently played, reuse from the full list
+    freshList = filteredList;
+  }
+
+  const randomIndex = Math.floor(Math.random() * freshList.length);
+  return { pair: freshList[randomIndex], chosenCategory: chosenCategory as Exclude<CategoryKey, 'Mixed'> };
 }
 export {};

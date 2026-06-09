@@ -36,7 +36,8 @@ import {
   Car,
   MapPin,
   Gamepad2,
-  Flame
+  Flame,
+  Copy
 } from 'lucide-react';
 
 export const CreateGamePage: React.FC = () => {
@@ -63,19 +64,28 @@ export const CreateGamePage: React.FC = () => {
     addCustomWordPair,
     deleteCustomWordPair,
     startGame,
-    resetGame
+    resetGame,
+    isMultiplayer,
+    isHost,
+    roomCode,
+    myPlayerId,
+    onlinePlayers,
+    leaveRoom
   } = useGame();
 
-  // Track which player's avatar picker is active
+  const [copied, setCopied] = useState(false);
   const [activeAvatarPicker, setActiveAvatarPicker] = useState<number | null>(null);
-
-  // State to manage Categories Modal
   const [isCategoryModalOpen, setIsCategoryModalOpen] = useState<boolean>(false);
-
-  // States for adding new custom word pair
   const [newCommonWord, setNewCommonWord] = useState<string>('');
   const [newImpostorWord, setNewImpostorWord] = useState<string>('');
   const [customWordError, setCustomWordError] = useState<string>('');
+
+  const handleCopyCode = () => {
+    playClick();
+    navigator.clipboard.writeText(roomCode);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
 
   const categoriesList: { key: Exclude<CategoryKey, 'Mixed'>; label: string; icon: React.ReactNode; color: string }[] = [
     { key: 'Animals', label: 'Animals', icon: <Sparkles className="w-4 h-4" />, color: 'from-green-500/20 to-emerald-500/10 text-emerald-400' },
@@ -144,6 +154,7 @@ export const CreateGamePage: React.FC = () => {
   };
 
   const isCustomCategoryEmpty = selectedCategories.includes('Custom') && selectedCategories.length === 1 && customWordPairs.length === 0;
+  const isGuest = isMultiplayer && !isHost;
 
   return (
     <div className="flex flex-col items-center justify-center min-h-[calc(100vh-80px)] px-6 py-6 relative">
@@ -151,40 +162,64 @@ export const CreateGamePage: React.FC = () => {
         
         {/* Title */}
         <div className="text-center">
-          <h2 className="text-3xl font-black text-white tracking-wide">
-            Game Setup
-          </h2>
-          <p className="text-sm text-slate-400 mt-1">Customize details before beginning</p>
+          {isMultiplayer ? (
+            <div className="flex flex-col items-center">
+              <h2 className="text-3xl font-black text-white tracking-wide">
+                Multiplayer Lobby
+              </h2>
+              <button 
+                onClick={handleCopyCode}
+                className="inline-flex items-center gap-2.5 mt-3 px-4 py-2 rounded-2xl bg-brand-primary/10 border border-brand-primary/20 text-slate-200 text-sm font-extrabold cursor-pointer active:scale-95 transition-all select-none hover:bg-brand-primary/15"
+              >
+                <Users className="w-4 h-4 text-brand-primary" />
+                <span>Room Code: <strong className="text-brand-primary text-base tracking-wider">{roomCode}</strong></span>
+                {copied ? (
+                  <span className="text-[10px] text-brand-accent uppercase font-black">Copied!</span>
+                ) : (
+                  <Copy className="w-3.5 h-3.5 text-slate-500" />
+                )}
+              </button>
+            </div>
+          ) : (
+            <>
+              <h2 className="text-3xl font-black text-white tracking-wide">
+                Game Setup
+              </h2>
+              <p className="text-sm text-slate-400 mt-1">Customize details before beginning</p>
+            </>
+          )}
         </div>
 
-        {/* Player Count Selection */}
-        <Card className="p-6 border-white/5 bg-brand-card/50">
-          <label className="text-sm font-bold text-slate-400 tracking-wider uppercase mb-3 flex items-center gap-2">
-            <Users className="w-4 h-4 text-brand-primary" />
-            Number of Players
-          </label>
-          <div className="grid grid-cols-5 gap-2 mt-2">
-            {[3, 4, 5, 6, 7, 8, 9, 10, 11, 12].map(num => (
-              <button
-                key={num}
-                onClick={() => selectPlayerCount(num)}
-                className={`py-2.5 rounded-xl font-bold transition-all duration-300 border ${
-                  playerCount === num
-                    ? 'bg-brand-primary border-brand-primary text-white shadow-lg shadow-brand-primary/25'
-                    : 'bg-white/5 border-white/10 text-slate-400 hover:bg-white/10 hover:text-white'
-                }`}
-              >
-                {num}
-              </button>
-            ))}
-          </div>
-        </Card>
+        {/* Player Count Selection (Local Only) */}
+        {!isMultiplayer && (
+          <Card className="p-6 border-white/5 bg-brand-card/50">
+            <label className="text-sm font-bold text-slate-400 tracking-wider uppercase mb-3 flex items-center gap-2">
+              <Users className="w-4 h-4 text-brand-primary" />
+              Number of Players
+            </label>
+            <div className="grid grid-cols-5 gap-2 mt-2">
+              {[3, 4, 5, 6, 7, 8, 9, 10, 11, 12].map(num => (
+                <button
+                  key={num}
+                  onClick={() => selectPlayerCount(num)}
+                  className={`py-2.5 rounded-xl font-bold transition-all duration-300 border ${
+                    playerCount === num
+                      ? 'bg-brand-primary border-brand-primary text-white shadow-lg shadow-brand-primary/25'
+                      : 'bg-white/5 border-white/10 text-slate-400 hover:bg-white/10 hover:text-white'
+                  }`}
+                >
+                  {num}
+                </button>
+              ))}
+            </div>
+          </Card>
+        )}
 
         {/* Difficulty Selection */}
         <Card className="p-6 border-white/5 bg-brand-card/50">
           <label className="text-sm font-bold text-slate-400 tracking-wider uppercase mb-3 flex items-center gap-2">
             <Gauge className="w-4 h-4 text-brand-secondary" />
-            Select Difficulty
+            Difficulty Level {isGuest && <span className="text-[10px] text-slate-500 font-semibold">(Set by Host)</span>}
           </label>
           <div className="grid grid-cols-3 gap-2.5 mt-2">
             {[
@@ -196,14 +231,17 @@ export const CreateGamePage: React.FC = () => {
               return (
                 <button
                   key={level.key}
+                  disabled={isGuest}
                   onClick={() => {
                     playClick();
                     setDifficulty(level.key as DifficultyKey);
                   }}
-                  className={`flex flex-col items-center justify-between p-3 rounded-2xl border bg-gradient-to-b cursor-pointer select-none transition-all duration-300 min-h-[105px] ${
+                  className={`flex flex-col items-center justify-between p-3 rounded-2xl border bg-gradient-to-b transition-all duration-300 min-h-[105px] ${
+                    isGuest ? 'cursor-default' : 'cursor-pointer select-none'
+                  } ${
                     isActive 
                       ? 'border-white/30 text-white shadow-lg bg-white/10 scale-[1.02]' 
-                      : `bg-brand-card/30 ${level.color}`
+                      : `bg-brand-card/30 ${level.color} ${isGuest ? 'opacity-30' : ''}`
                   }`}
                 >
                   <span className="text-2xl mb-1">{level.emoji}</span>
@@ -220,7 +258,7 @@ export const CreateGamePage: React.FC = () => {
           <div className="flex justify-between items-center mb-3">
             <label className="text-sm font-bold text-slate-400 tracking-wider uppercase flex items-center gap-2">
               <Sparkles className="w-4 h-4 text-brand-secondary" />
-              Game Themes & Categories
+              Game Themes & Categories {isGuest && <span className="text-[10px] text-slate-500 font-semibold">(Set by Host)</span>}
             </label>
             <span className="text-[10px] bg-brand-primary/25 text-brand-primary px-2.5 py-0.5 rounded-full font-extrabold uppercase border border-brand-primary/30">
               {selectedCategories.includes('Mixed') 
@@ -238,7 +276,7 @@ export const CreateGamePage: React.FC = () => {
                 </span>
               ) : selectedCategories.filter(c => c !== 'Custom').length === 0 ? (
                 <span className="text-xs text-slate-500 font-bold uppercase tracking-wider py-1.5 px-2">
-                  No theme selected (Tap button to choose)
+                  No theme selected
                 </span>
               ) : (
                 selectedCategories
@@ -259,55 +297,59 @@ export const CreateGamePage: React.FC = () => {
               )}
             </div>
 
-            <Button
-              variant="secondary"
-              onClick={() => {
-                playClick();
-                setIsCategoryModalOpen(true);
-              }}
-              className="w-full py-3 rounded-xl font-bold text-sm flex items-center justify-center gap-2 bg-brand-primary/10 border border-brand-primary/20 text-brand-primary hover:bg-brand-primary/25 hover:border-brand-primary/30 transition-all duration-300 shadow-md shadow-brand-primary/5 cursor-pointer"
-            >
-              <Settings className="w-4 h-4" />
-              Choose Categories & Themes
-            </Button>
+            {!isGuest && (
+              <Button
+                variant="secondary"
+                onClick={() => {
+                  playClick();
+                  setIsCategoryModalOpen(true);
+                }}
+                className="w-full py-3 rounded-xl font-bold text-sm flex items-center justify-center gap-2 bg-brand-primary/10 border border-brand-primary/20 text-brand-primary hover:bg-brand-primary/25 hover:border-brand-primary/30 transition-all duration-300 shadow-md shadow-brand-primary/5 cursor-pointer"
+              >
+                <Settings className="w-4 h-4" />
+                Choose Categories & Themes
+              </Button>
+            )}
           </div>
 
-          {/* Custom Words Toggle Switch */}
-          <div className="mt-4 pt-4 border-t border-white/5 flex items-center justify-between">
-            <div className="flex flex-col">
-              <span className="text-sm font-bold text-slate-200 flex items-center gap-2">
-                <UserPlus className="w-4 h-4 text-yellow-400" />
-                Include Custom Word Pool
-              </span>
-              <span className="text-xs text-slate-500 max-w-[280px]">
-                Mix in your privately created word pairs during play
-              </span>
-            </div>
-            <button
-              onClick={() => {
-                playClick();
-                const isCustomActive = selectedCategories.includes('Custom');
-                if (isCustomActive) {
-                  setSelectedCategories(selectedCategories.filter(c => c !== 'Custom'));
-                } else {
-                  setSelectedCategories([...selectedCategories, 'Custom']);
-                }
-              }}
-              className={`w-12 h-6 rounded-full transition-colors relative border border-white/10 ${
-                selectedCategories.includes('Custom') ? 'bg-yellow-500 border-yellow-500' : 'bg-white/5'
-              }`}
-            >
-              <span 
-                className={`absolute top-0.5 w-4.5 h-4.5 rounded-full bg-white transition-all duration-300 ${
-                  selectedCategories.includes('Custom') ? 'left-[25px]' : 'left-[3px]'
+          {/* Custom Words Toggle Switch (Local/Host Only) */}
+          {!isGuest && (
+            <div className="mt-4 pt-4 border-t border-white/5 flex items-center justify-between">
+              <div className="flex flex-col">
+                <span className="text-sm font-bold text-slate-200 flex items-center gap-2">
+                  <UserPlus className="w-4 h-4 text-yellow-400" />
+                  Include Custom Word Pool
+                </span>
+                <span className="text-xs text-slate-500 max-w-[280px]">
+                  Mix in your privately created word pairs during play
+                </span>
+              </div>
+              <button
+                onClick={() => {
+                  playClick();
+                  const isCustomActive = selectedCategories.includes('Custom');
+                  if (isCustomActive) {
+                    setSelectedCategories(selectedCategories.filter(c => c !== 'Custom'));
+                  } else {
+                    setSelectedCategories([...selectedCategories, 'Custom']);
+                  }
+                }}
+                className={`w-12 h-6 rounded-full transition-colors relative border border-white/10 ${
+                  selectedCategories.includes('Custom') ? 'bg-yellow-500 border-yellow-500' : 'bg-white/5'
                 }`}
-              />
-            </button>
-          </div>
+              >
+                <span 
+                  className={`absolute top-0.5 w-4.5 h-4.5 rounded-full bg-white transition-all duration-300 ${
+                    selectedCategories.includes('Custom') ? 'left-[25px]' : 'left-[3px]'
+                  }`}
+                />
+              </button>
+            </div>
+          )}
         </Card>
 
-        {/* Custom Word Pair Manager drawer (Shown only when 'Custom' selected) */}
-        {selectedCategories.includes('Custom') && (
+        {/* Custom Word Pair Manager drawer (Host Only) */}
+        {!isGuest && selectedCategories.includes('Custom') && (
           <Card className="p-6 border-yellow-500/20 bg-brand-card/65 animate-fade-in-up">
             <h3 className="text-sm font-bold text-yellow-400 tracking-wider uppercase mb-4 flex items-center gap-2">
               <UserPlus className="w-4.5 h-4.5" />
@@ -394,231 +436,313 @@ export const CreateGamePage: React.FC = () => {
           </Card>
         )}
 
-        {/* Players List Customizer */}
+        {/* Players List / Lobby Roster Card */}
         <Card className="p-6 border-white/5 bg-brand-card/50">
           <div className="flex justify-between items-center mb-3">
             <label className="text-sm font-bold text-slate-400 tracking-wider uppercase flex items-center gap-2">
               <UserPlus className="w-4 h-4 text-cyan-400" />
-              Players & Avatars
+              {isMultiplayer ? `Lobby Players (${onlinePlayers.length})` : 'Players & Avatars'}
             </label>
-            <button 
-              onClick={resetNames}
-              className="text-xs text-slate-500 hover:text-brand-secondary flex items-center gap-1 font-semibold transition-colors"
-            >
-              <RotateCcw className="w-3 h-3" />
-              Reset Config
-            </button>
+            {!isMultiplayer && (
+              <button 
+                onClick={resetNames}
+                className="text-xs text-slate-500 hover:text-brand-secondary flex items-center gap-1 font-semibold transition-colors"
+              >
+                <RotateCcw className="w-3 h-3" />
+                Reset Config
+              </button>
+            )}
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-h-[220px] overflow-y-auto pr-1 mt-2">
-            {Array(playerCount).fill(null).map((_, idx) => (
-              <div key={idx} className="relative">
+            {isMultiplayer ? (
+              // Online Lobby Players Display
+              onlinePlayers.map((player) => (
                 <div 
-                  className="flex items-center gap-2 bg-white/[0.02] border border-white/5 p-2 rounded-xl focus-within:border-brand-primary/45 transition-colors"
+                  key={player.id} 
+                  className="flex items-center justify-between bg-white/[0.02] border border-white/5 p-3 rounded-xl transition-all duration-300 hover:bg-white/[0.04]"
                 >
-                  {/* Avatar Picker Button */}
-                  <button
-                    type="button"
-                    onClick={() => {
-                      playClick();
-                      setActiveAvatarPicker(activeAvatarPicker === idx ? null : idx);
-                    }}
-                    className="w-9 h-9 rounded-xl bg-white/5 border border-white/10 hover:bg-white/10 flex items-center justify-center text-lg active:scale-95 transition-all"
-                    title="Click to change avatar"
-                  >
-                    {customAvatars[idx] || '🦊'}
-                  </button>
-
-                  <input
-                    type="text"
-                    maxLength={14}
-                    value={customNames[idx] || ''}
-                    onChange={(e) => handleNameChange(idx, e.target.value)}
-                    placeholder={`Player ${idx + 1}`}
-                    className="bg-transparent text-sm font-bold text-slate-200 w-full focus:outline-none placeholder-slate-600"
-                  />
-                </div>
-
-                {/* Inline Popover Selector for Avatars */}
-                {activeAvatarPicker === idx && (
-                  <div className="absolute top-12 left-0 right-0 z-30 p-3.5 rounded-2xl glass-panel border border-brand-primary/25 bg-brand-dark/95 shadow-2xl">
-                    <div className="flex items-center justify-between text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2 px-1">
-                      <span>Select Avatar</span>
-                      <button 
-                        onClick={() => setActiveAvatarPicker(null)} 
-                        className="text-slate-400 hover:text-brand-danger"
-                      >
-                        Close
-                      </button>
-                    </div>
-                    <div className="grid grid-cols-6 gap-1.5 max-h-[120px] overflow-y-auto pr-1">
-                      {AVATAR_POOL.map(emoji => (
-                        <button
-                          key={emoji}
-                          type="button"
-                          onClick={() => {
-                            handleAvatarChange(idx, emoji);
-                            setActiveAvatarPicker(null);
-                          }}
-                          className={`w-9 h-9 flex items-center justify-center text-lg rounded-xl hover:bg-white/10 active:scale-90 transition-all ${
-                            customAvatars[idx] === emoji ? 'bg-brand-primary/20 border border-brand-primary/30' : ''
-                          }`}
-                        >
-                          {emoji}
-                        </button>
-                      ))}
-                    </div>
+                  <div className="flex items-center gap-2.5">
+                    <span className="w-9 h-9 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center text-lg shadow-sm">
+                      {player.avatar}
+                    </span>
+                    <span className="text-sm font-bold text-slate-200">
+                      {player.name} {player.id === myPlayerId && <span className="text-[10px] text-slate-500 font-bold italic">(You)</span>}
+                    </span>
                   </div>
-                )}
+                  {player.isHost ? (
+                    <span className="text-[9px] bg-brand-primary/20 border border-brand-primary/30 text-brand-primary px-2.5 py-0.5 rounded-full font-black uppercase tracking-wider animate-pulse">
+                      Host
+                    </span>
+                  ) : (
+                    <span className="text-[9px] bg-white/5 border border-white/10 text-slate-500 px-2 py-0.5 rounded-full font-bold uppercase">
+                      Player
+                    </span>
+                  )}
+                </div>
+              ))
+            ) : (
+              // Offline Player Configuration Cards
+              Array(playerCount).fill(null).map((_, idx) => (
+                <div key={idx} className="relative">
+                  <div 
+                    className="flex items-center gap-2 bg-white/[0.02] border border-white/5 p-2 rounded-xl focus-within:border-brand-primary/45 transition-colors"
+                  >
+                    {/* Avatar Picker Button */}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        playClick();
+                        setActiveAvatarPicker(activeAvatarPicker === idx ? null : idx);
+                      }}
+                      className="w-9 h-9 rounded-xl bg-white/5 border border-white/10 hover:bg-white/10 flex items-center justify-center text-lg active:scale-95 transition-all"
+                      title="Click to change avatar"
+                    >
+                      {customAvatars[idx] || '🦊'}
+                    </button>
+
+                    <input
+                      type="text"
+                      maxLength={14}
+                      value={customNames[idx] || ''}
+                      onChange={(e) => handleNameChange(idx, e.target.value)}
+                      placeholder={`Player ${idx + 1}`}
+                      className="bg-transparent text-sm font-bold text-slate-200 w-full focus:outline-none placeholder-slate-600"
+                    />
+                  </div>
+
+                  {/* Inline Popover Selector for Avatars */}
+                  {activeAvatarPicker === idx && (
+                    <div className="absolute top-12 left-0 right-0 z-30 p-3.5 rounded-2xl glass-panel border border-brand-primary/25 bg-brand-dark/95 shadow-2xl">
+                      <div className="flex items-center justify-between text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2 px-1">
+                        <span>Select Avatar</span>
+                        <button 
+                          onClick={() => setActiveAvatarPicker(null)} 
+                          className="text-slate-400 hover:text-brand-danger"
+                        >
+                          Close
+                        </button>
+                      </div>
+                      <div className="grid grid-cols-6 gap-1.5 max-h-[120px] overflow-y-auto pr-1">
+                        {AVATAR_POOL.map(emoji => (
+                          <button
+                            key={emoji}
+                            type="button"
+                            onClick={() => {
+                              handleAvatarChange(idx, emoji);
+                              setActiveAvatarPicker(null);
+                            }}
+                            className={`w-9 h-9 flex items-center justify-center text-lg rounded-xl hover:bg-white/10 active:scale-90 transition-all ${
+                              customAvatars[idx] === emoji ? 'bg-brand-primary/20 border border-brand-primary/30' : ''
+                            }`}
+                          >
+                            {emoji}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ))
+            )}
+          </div>
+        </Card>
+
+        {/* Options Settings panel (Hidden for Guests) */}
+        {!isGuest && (
+          <Card className="p-5 border-white/5 bg-brand-card/50 flex flex-col gap-4">
+            <label className="text-sm font-bold text-slate-400 tracking-wider uppercase mb-1 flex items-center gap-2">
+              <Settings className="w-4 h-4 text-brand-secondary" />
+              Gameplay Settings
+            </label>
+
+            {/* Toggle 1: Impostor Knows Role */}
+            <div className="flex items-center justify-between py-1 border-b border-white/5 last:border-0">
+              <div className="flex flex-col">
+                <span className="text-sm font-bold text-slate-200 flex items-center gap-1.5">
+                  {impostorKnowsRole ? <Eye className="w-4 h-4 text-brand-primary" /> : <EyeOff className="w-4 h-4 text-slate-500" />}
+                  Impostor Knows Role
+                </span>
+                <span className="text-xs text-slate-500 max-w-[280px]">
+                  {impostorKnowsRole 
+                    ? "Impostor is warned immediately: '⚠️ YOU ARE THE IMPOSTOR'" 
+                    : "Blind Mode: Impostor only sees their word and is blind to their role initially"}
+                </span>
               </div>
-            ))}
-          </div>
-        </Card>
-
-        {/* Options Settings panel */}
-        <Card className="p-5 border-white/5 bg-brand-card/50 flex flex-col gap-4">
-          <label className="text-sm font-bold text-slate-400 tracking-wider uppercase mb-1 flex items-center gap-2">
-            <Settings className="w-4 h-4 text-brand-secondary" />
-            Gameplay Settings
-          </label>
-
-          {/* Toggle 1: Impostor Knows Role */}
-          <div className="flex items-center justify-between py-1 border-b border-white/5 last:border-0">
-            <div className="flex flex-col">
-              <span className="text-sm font-bold text-slate-200 flex items-center gap-1.5">
-                {impostorKnowsRole ? <Eye className="w-4 h-4 text-brand-primary" /> : <EyeOff className="w-4 h-4 text-slate-500" />}
-                Impostor Knows Role
-              </span>
-              <span className="text-xs text-slate-500 max-w-[280px]">
-                {impostorKnowsRole 
-                  ? "Impostor is warned immediately: '⚠️ YOU ARE THE IMPOSTOR'" 
-                  : "Blind Mode: Impostor only sees their word and is blind to their role initially"}
-              </span>
-            </div>
-            <button
-              onClick={() => {
-                playClick();
-                setImpostorKnowsRole(!impostorKnowsRole);
-              }}
-              className={`w-12 h-6 rounded-full transition-colors relative border border-white/10 ${
-                impostorKnowsRole ? 'bg-brand-primary' : 'bg-white/5'
-              }`}
-            >
-              <span 
-                className={`absolute top-0.5 w-4.5 h-4.5 rounded-full bg-white transition-all duration-300 ${
-                  impostorKnowsRole ? 'left-[25px]' : 'left-[3px]'
+              <button
+                onClick={() => {
+                  playClick();
+                  setImpostorKnowsRole(!impostorKnowsRole);
+                }}
+                className={`w-12 h-6 rounded-full transition-colors relative border border-white/10 ${
+                  impostorKnowsRole ? 'bg-brand-primary' : 'bg-white/5'
                 }`}
-              />
-            </button>
-          </div>
-
-          {/* Toggle 2: Randomize Order */}
-          <div className="flex items-center justify-between py-1 border-b border-white/5 last:border-0">
-            <div className="flex flex-col">
-              <span className="text-sm font-bold text-slate-200 flex items-center gap-1.5">
-                <Shuffle className="w-4 h-4 text-brand-secondary" />
-                Randomize Player Order
-              </span>
-              <span className="text-xs text-slate-500">
-                Shuffles turn sequence for card reveals and clue turns
-              </span>
+              >
+                <span 
+                  className={`absolute top-0.5 w-4.5 h-4.5 rounded-full bg-white transition-all duration-300 ${
+                    impostorKnowsRole ? 'left-[25px]' : 'left-[3px]'
+                  }`}
+                />
+              </button>
             </div>
-            <button
-              onClick={() => {
-                playClick();
-                setRandomizeOrder(!randomizeOrder);
-              }}
-              className={`w-12 h-6 rounded-full transition-colors relative border border-white/10 ${
-                randomizeOrder ? 'bg-brand-primary' : 'bg-white/5'
-              }`}
-            >
-              <span 
-                className={`absolute top-0.5 w-4.5 h-4.5 rounded-full bg-white transition-all duration-300 ${
-                  randomizeOrder ? 'left-[25px]' : 'left-[3px]'
-                }`}
-              />
-            </button>
-          </div>
 
-          {/* Toggle 3: Hints & Visual Aids */}
-          <div className="flex items-center justify-between py-1 border-b border-white/5 last:border-0">
-            <div className="flex flex-col">
-              <span className="text-sm font-bold text-slate-200 flex items-center gap-1.5">
-                <HelpCircle className="w-4 h-4 text-brand-primary" />
-                Word Hints & Visual Aids
-              </span>
-              <span className="text-xs text-slate-500 max-w-[280px]">
-                Show descriptive emojis and visual illustrations for players on reveal cards
-              </span>
+            {/* Toggle 2: Randomize Order */}
+            <div className="flex items-center justify-between py-1 border-b border-white/5 last:border-0">
+              <div className="flex flex-col">
+                <span className="text-sm font-bold text-slate-200 flex items-center gap-1.5">
+                  <Shuffle className="w-4 h-4 text-brand-secondary" />
+                  Randomize Player Order
+                </span>
+                <span className="text-xs text-slate-500">
+                  Shuffles turn sequence for card reveals and clue turns
+                </span>
+              </div>
+              <button
+                onClick={() => {
+                  playClick();
+                  setRandomizeOrder(!randomizeOrder);
+                }}
+                className={`w-12 h-6 rounded-full transition-colors relative border border-white/10 ${
+                  randomizeOrder ? 'bg-brand-primary' : 'bg-white/5'
+                }`}
+              >
+                <span 
+                  className={`absolute top-0.5 w-4.5 h-4.5 rounded-full bg-white transition-all duration-300 ${
+                    randomizeOrder ? 'left-[25px]' : 'left-[3px]'
+                  }`}
+                />
+              </button>
             </div>
-            <button
-              onClick={() => {
-                playClick();
-                setHintsEnabled(!hintsEnabled);
-              }}
-              className={`w-12 h-6 rounded-full transition-colors relative border border-white/10 ${
-                hintsEnabled ? 'bg-brand-primary' : 'bg-white/5'
-              }`}
-            >
-              <span 
-                className={`absolute top-0.5 w-4.5 h-4.5 rounded-full bg-white transition-all duration-300 ${
-                  hintsEnabled ? 'left-[25px]' : 'left-[3px]'
-                }`}
-              />
-            </button>
-          </div>
 
-          {/* Toggle 4: Sound Effects */}
-          <div className="flex items-center justify-between py-1 last:border-0">
-            <div className="flex flex-col">
-              <span className="text-sm font-bold text-slate-200 flex items-center gap-1.5">
-                {soundEnabled ? <Volume2 className="w-4 h-4 text-brand-primary" /> : <VolumeX className="w-4 h-4 text-brand-danger" />}
-                Sound Effects
-              </span>
-              <span className="text-xs text-slate-500">
-                Play synthesized retro plucks and sweeps for game triggers
-              </span>
+            {/* Toggle 3: Hints & Visual Aids */}
+            <div className="flex items-center justify-between py-1 border-b border-white/5 last:border-0">
+              <div className="flex flex-col">
+                <span className="text-sm font-bold text-slate-200 flex items-center gap-1.5">
+                  <HelpCircle className="w-4 h-4 text-brand-primary" />
+                  Word Hints & Visual Aids
+                </span>
+                <span className="text-xs text-slate-500 max-w-[280px]">
+                  Show descriptive emojis and visual illustrations for players on reveal cards
+                </span>
+              </div>
+              <button
+                onClick={() => {
+                  playClick();
+                  setHintsEnabled(!hintsEnabled);
+                }}
+                className={`w-12 h-6 rounded-full transition-colors relative border border-white/10 ${
+                  hintsEnabled ? 'bg-brand-primary' : 'bg-white/5'
+                }`}
+              >
+                <span 
+                  className={`absolute top-0.5 w-4.5 h-4.5 rounded-full bg-white transition-all duration-300 ${
+                    hintsEnabled ? 'left-[25px]' : 'left-[3px]'
+                  }`}
+                />
+              </button>
             </div>
-            <button
-              onClick={() => {
-                playClick();
-                setSoundEnabled(!soundEnabled);
-              }}
-              className={`w-12 h-6 rounded-full transition-colors relative border border-white/10 ${
-                soundEnabled ? 'bg-brand-primary' : 'bg-white/5'
-              }`}
-            >
-              <span 
-                className={`absolute top-0.5 w-4.5 h-4.5 rounded-full bg-white transition-all duration-300 ${
-                  soundEnabled ? 'left-[25px]' : 'left-[3px]'
-                }`}
-              />
-            </button>
-          </div>
-        </Card>
 
-        {/* Start Button */}
+            {/* Toggle 4: Sound Effects */}
+            <div className="flex items-center justify-between py-1 last:border-0">
+              <div className="flex flex-col">
+                <span className="text-sm font-bold text-slate-200 flex items-center gap-1.5">
+                  {soundEnabled ? <Volume2 className="w-4 h-4 text-brand-primary" /> : <VolumeX className="w-4 h-4 text-brand-danger" />}
+                  Sound Effects
+                </span>
+                <span className="text-xs text-slate-500">
+                  Play synthesized retro plucks and sweeps for game triggers
+                </span>
+              </div>
+              <button
+                onClick={() => {
+                  playClick();
+                  setSoundEnabled(!soundEnabled);
+                }}
+                className={`w-12 h-6 rounded-full transition-colors relative border border-white/10 ${
+                  soundEnabled ? 'bg-brand-primary' : 'bg-white/5'
+                }`}
+              >
+                <span 
+                  className={`absolute top-0.5 w-4.5 h-4.5 rounded-full bg-white transition-all duration-300 ${
+                    soundEnabled ? 'left-[25px]' : 'left-[3px]'
+                  }`}
+                />
+              </button>
+            </div>
+          </Card>
+        )}
+
+        {/* Footer Actions */}
         <div className="flex gap-4">
-          <Button 
-            variant="glass" 
-            onClick={resetGame} 
-            className="flex-1 py-4 rounded-2xl"
-          >
-            Cancel
-          </Button>
-          <Button 
-            variant="primary" 
-            onClick={startGame} 
-            disabled={selectedCategories.length === 0 || isCustomCategoryEmpty}
-            className="flex-[2] py-4 rounded-2xl font-bold disabled:opacity-40 disabled:pointer-events-none"
-          >
-            <Play className="w-5 h-5 mr-2" />
-            {selectedCategories.length === 0 
-              ? 'Select Theme' 
-              : isCustomCategoryEmpty 
-                ? 'Add Words First' 
-                : 'Start Game'}
-          </Button>
+          {isMultiplayer ? (
+            // Multiplayer Footer Controls
+            isHost ? (
+              // Host View: Close lobby and Start
+              <>
+                <Button 
+                  variant="glass" 
+                  onClick={leaveRoom} 
+                  className="flex-1 py-4 rounded-2xl border-white/10 hover:bg-brand-danger/10 hover:text-brand-danger hover:border-brand-danger/25 font-bold transition-all"
+                >
+                  Close Lobby
+                </Button>
+                <Button 
+                  variant="primary" 
+                  onClick={startGame} 
+                  disabled={onlinePlayers.length < 3 || selectedCategories.length === 0 || isCustomCategoryEmpty}
+                  className="flex-[2] py-4 rounded-2xl font-bold disabled:opacity-40 disabled:pointer-events-none"
+                >
+                  <Play className="w-5 h-5 mr-2" />
+                  {onlinePlayers.length < 3 
+                    ? 'Need 3+ Players' 
+                    : selectedCategories.length === 0
+                      ? 'Select Theme'
+                      : 'Start Game'}
+                </Button>
+              </>
+            ) : (
+              // Guest View: Leave and Status Indicator
+              <>
+                <Button 
+                  variant="glass" 
+                  onClick={leaveRoom} 
+                  className="flex-1 py-4 rounded-2xl border-white/10 hover:bg-brand-danger/10 hover:text-brand-danger hover:border-brand-danger/25 font-bold transition-all"
+                >
+                  Leave Lobby
+                </Button>
+                <div className="flex-[2] py-4 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center gap-2.5 animate-pulse select-none">
+                  <span className="w-2.5 h-2.5 rounded-full bg-brand-secondary animate-ping" />
+                  <span className="text-[10px] text-slate-400 font-extrabold uppercase tracking-widest leading-none">
+                    Waiting for Host...
+                  </span>
+                </div>
+              </>
+            )
+          ) : (
+            // Offline Pass & Play Footer Controls
+            <>
+              <Button 
+                variant="glass" 
+                onClick={resetGame} 
+                className="flex-1 py-4 rounded-2xl"
+              >
+                Cancel
+              </Button>
+              <Button 
+                variant="primary" 
+                onClick={startGame} 
+                disabled={selectedCategories.length === 0 || isCustomCategoryEmpty}
+                className="flex-[2] py-4 rounded-2xl font-bold disabled:opacity-40 disabled:pointer-events-none"
+              >
+                <Play className="w-5 h-5 mr-2" />
+                {selectedCategories.length === 0 
+                  ? 'Select Theme' 
+                  : isCustomCategoryEmpty 
+                    ? 'Add Words First' 
+                    : 'Start Game'}
+              </Button>
+            </>
+          )}
         </div>
       </div>
 
@@ -651,7 +775,6 @@ export const CreateGamePage: React.FC = () => {
               <button
                 onClick={() => {
                   playClick();
-                  // Select all 18 built-in categories (excluding Custom and Mixed)
                   setSelectedCategories([
                     'Animals', 'Food', 'Objects & Things', 'School & Learning', 'Silly & Random',
                     'Geography (Countries & Cities)', 'Movies & TV', 'Music & Entertainment',
@@ -667,7 +790,6 @@ export const CreateGamePage: React.FC = () => {
               <button
                 onClick={() => {
                   playClick();
-                  // Clear everything except Custom if custom is active
                   const hasCustom = selectedCategories.includes('Custom');
                   setSelectedCategories(hasCustom ? ['Custom'] : []);
                 }}
@@ -688,10 +810,8 @@ export const CreateGamePage: React.FC = () => {
                       playClick();
                       const hasCustom = selectedCategories.includes('Custom');
                       if (isMixedActive) {
-                        // Turn off Mixed Mode: clear and leave empty (standard categories can be selected)
                         setSelectedCategories(hasCustom ? ['Custom'] : []);
                       } else {
-                        // Turn on Mixed Mode: deselect all standard categories
                         setSelectedCategories(hasCustom ? ['Mixed', 'Custom'] : ['Mixed']);
                       }
                     }}
@@ -702,7 +822,6 @@ export const CreateGamePage: React.FC = () => {
                     }`}
                   >
                     <div className="flex items-center gap-3">
-                      {/* Checkbox indicator */}
                       <div className={`w-5 h-5 rounded border flex items-center justify-center transition-all duration-200 ${
                         isMixedActive ? 'bg-brand-primary border-brand-primary text-white shadow-sm shadow-brand-primary/20' : 'border-slate-500'
                       }`}>
@@ -738,10 +857,8 @@ export const CreateGamePage: React.FC = () => {
                         playClick();
                         const hasCustom = selectedCategories.includes('Custom');
                         if (isMixedActive) {
-                          // Clicking any standard category turns Mixed Mode off and selects only this category
                           setSelectedCategories(hasCustom ? [cat.key, 'Custom'] : [cat.key]);
                         } else {
-                          // Regular toggle
                           if (isSelected) {
                             setSelectedCategories(selectedCategories.filter(c => c !== cat.key));
                           } else {
@@ -755,7 +872,6 @@ export const CreateGamePage: React.FC = () => {
                           : 'bg-brand-card/40 border-white/5 text-slate-400 hover:border-white/20 hover:text-slate-200'
                       }`}
                     >
-                      {/* Checkbox indicator */}
                       <div className={`w-4.5 h-4.5 rounded border flex items-center justify-center transition-all duration-200 ${
                         isSelected && !isMixedActive
                           ? 'bg-brand-primary border-brand-primary text-white shadow-sm shadow-brand-primary/20' 

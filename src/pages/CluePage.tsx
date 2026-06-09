@@ -1,74 +1,88 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React from 'react';
 import { useGame } from '../context/GameContext';
 import { Button } from '../components/Button';
 import { Card } from '../components/Card';
-import { playClick, playTick, playBuzzer } from '../utils/sounds';
+import { playClick } from '../utils/sounds';
 import { Volume2, Play, Pause, RotateCcw, ShieldAlert, Check } from 'lucide-react';
+import { multiplayer } from '../utils/multiplayer';
 
 export const CluePage: React.FC = () => {
   const {
     players,
     playerOrder,
     setGameState,
+    isMultiplayer,
+    isHost,
+    activeClueIndex,
+    setActiveClueIndex,
+    timerSeconds,
+    setTimerSeconds,
+    timerActive,
+    setTimerActive,
   } = useGame();
-
-  // Track who is currently giving a clue
-  const [activeClueIndex, setActiveClueIndex] = useState<number>(0);
-  
-  // Timer states
-  const [timerSeconds, setTimerSeconds] = useState<number>(30);
-  const [timerActive, setTimerActive] = useState<boolean>(false);
-  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  useEffect(() => {
-    if (timerActive && timerSeconds > 0) {
-      timerRef.current = setTimeout(() => {
-        setTimerSeconds(prev => prev - 1);
-        playTick(); // Play ticking sound every second!
-      }, 1000);
-    } else if (timerSeconds === 0) {
-      if (timerActive) {
-        setTimeout(() => {
-          setTimerActive(false);
-        }, 0);
-      }
-      playBuzzer(); // Play buzzer sound!
-    }
-
-    return () => {
-      if (timerRef.current) clearTimeout(timerRef.current);
-    };
-  }, [timerActive, timerSeconds]);
 
   const handleNextSpeaker = () => {
     playClick();
-    // Reset timer for next speaker
+    const nextIdx = activeClueIndex < playerOrder.length - 1 ? activeClueIndex + 1 : activeClueIndex;
+    setActiveClueIndex(nextIdx);
     setTimerSeconds(30);
     setTimerActive(false);
     
-    if (activeClueIndex < playerOrder.length - 1) {
-      setActiveClueIndex(prev => prev + 1);
+    if (isMultiplayer && isHost) {
+      multiplayer.send({
+        type: 'TIMER_SYNC',
+        activeClueIndex: nextIdx,
+        timerSeconds: 30,
+        timerActive: false
+      });
     }
   };
 
   const handlePrevSpeaker = () => {
     playClick();
+    const prevIdx = activeClueIndex > 0 ? activeClueIndex - 1 : activeClueIndex;
+    setActiveClueIndex(prevIdx);
     setTimerSeconds(30);
     setTimerActive(false);
-    if (activeClueIndex > 0) {
-      setActiveClueIndex(prev => prev - 1);
+    
+    if (isMultiplayer && isHost) {
+      multiplayer.send({
+        type: 'TIMER_SYNC',
+        activeClueIndex: prevIdx,
+        timerSeconds: 30,
+        timerActive: false
+      });
     }
   };
 
   const toggleTimer = () => {
     playClick();
-    setTimerActive(!timerActive);
+    const nextActive = !timerActive;
+    setTimerActive(nextActive);
+    
+    if (isMultiplayer && isHost) {
+      multiplayer.send({
+        type: 'TIMER_SYNC',
+        activeClueIndex,
+        timerSeconds,
+        timerActive: nextActive
+      });
+    }
   };
 
   const resetTimer = () => {
     playClick();
     setTimerActive(false);
     setTimerSeconds(30);
+    
+    if (isMultiplayer && isHost) {
+      multiplayer.send({
+        type: 'TIMER_SYNC',
+        activeClueIndex,
+        timerSeconds: 30,
+        timerActive: false
+      });
+    }
   };
 
   const handleProceedToVoting = () => {
@@ -124,22 +138,24 @@ export const CluePage: React.FC = () => {
               </div>
 
               {/* Timer Controls */}
-              <div className="flex gap-2 mt-4">
-                <button
-                  onClick={toggleTimer}
-                  className="px-4 py-2 rounded-xl bg-white/5 border border-white/10 hover:bg-white/10 text-slate-200 text-xs font-bold flex items-center gap-1 transition-colors"
-                >
-                  {timerActive ? <Pause className="w-3.5 h-3.5" /> : <Play className="w-3.5 h-3.5" />}
-                  {timerActive ? 'Pause' : 'Start'}
-                </button>
-                <button
-                  onClick={resetTimer}
-                  className="p-2 rounded-xl bg-white/5 border border-white/10 hover:bg-brand-danger/20 hover:text-brand-danger text-slate-400 transition-colors"
-                  title="Reset Timer"
-                >
-                  <RotateCcw className="w-3.5 h-3.5" />
-                </button>
-              </div>
+              {(!isMultiplayer || isHost) && (
+                <div className="flex gap-2 mt-4">
+                  <button
+                    onClick={toggleTimer}
+                    className="px-4 py-2 rounded-xl bg-white/5 border border-white/10 hover:bg-white/10 text-slate-200 text-xs font-bold flex items-center gap-1 transition-colors"
+                  >
+                    {timerActive ? <Pause className="w-3.5 h-3.5" /> : <Play className="w-3.5 h-3.5" />}
+                    {timerActive ? 'Pause' : 'Start'}
+                  </button>
+                  <button
+                    onClick={resetTimer}
+                    className="p-2 rounded-xl bg-white/5 border border-white/10 hover:bg-brand-danger/20 hover:text-brand-danger text-slate-400 transition-colors"
+                    title="Reset Timer"
+                  >
+                    <RotateCcw className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              )}
             </div>
           </Card>
         )}
@@ -192,36 +208,38 @@ export const CluePage: React.FC = () => {
         </Card>
 
         {/* Footer actions */}
-        <div className="flex gap-4">
-          {activeClueIndex > 0 && (
-            <Button
-              variant="glass"
-              onClick={handlePrevSpeaker}
-              className="flex-1 py-4 rounded-2xl"
-            >
-              Previous
-            </Button>
-          )}
+        {(!isMultiplayer || isHost) && (
+          <div className="flex gap-4">
+            {activeClueIndex > 0 && (
+              <Button
+                variant="glass"
+                onClick={handlePrevSpeaker}
+                className="flex-1 py-4 rounded-2xl"
+              >
+                Previous
+              </Button>
+            )}
 
-          {activeClueIndex < playerOrder.length - 1 ? (
-            <Button
-              variant="secondary"
-              onClick={handleNextSpeaker}
-              className="flex-[2] py-4 rounded-2xl font-bold"
-            >
-              Next Speaker
-            </Button>
-          ) : (
-            <Button
-              variant="primary"
-              onClick={handleProceedToVoting}
-              className="flex-[2] py-4 rounded-2xl font-bold animate-pulse"
-            >
-              <ShieldAlert className="w-5 h-5 mr-2" />
-              Proceed to Voting
-            </Button>
-          )}
-        </div>
+            {activeClueIndex < playerOrder.length - 1 ? (
+              <Button
+                variant="secondary"
+                onClick={handleNextSpeaker}
+                className="flex-[2] py-4 rounded-2xl font-bold"
+              >
+                Next Speaker
+              </Button>
+            ) : (
+              <Button
+                variant="primary"
+                onClick={handleProceedToVoting}
+                className="flex-[2] py-4 rounded-2xl font-bold animate-pulse"
+              >
+                <ShieldAlert className="w-5 h-5 mr-2" />
+                Proceed to Voting
+              </Button>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );

@@ -10,12 +10,43 @@ export const VotingPage: React.FC = () => {
     playerOrder,
     currentVoterIndex,
     submitVote,
+    isMultiplayer,
+    isHost,
+    myPlayerId,
+    votes,
+    onlinePlayers,
   } = useGame();
 
-  const voterId = playerOrder[currentVoterIndex];
+  const voterId = isMultiplayer ? myPlayerId : playerOrder[currentVoterIndex];
   const voter = players.find(p => p.id === voterId);
 
   if (!voter) return null;
+
+  const hasVoted = isMultiplayer && votes[myPlayerId] !== undefined;
+
+  if (hasVoted) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[calc(100vh-80px)] px-6 py-6 text-center animate-fade-in">
+        <div className="ambient-glow-1 top-20 right-10 animate-float" />
+        <div className="w-full max-w-md flex flex-col gap-6 z-10">
+          <Card className="p-8 border-white/5 bg-brand-card/50">
+            <div className="w-16 h-16 rounded-full bg-brand-primary/10 border border-brand-primary/20 flex items-center justify-center text-3xl mx-auto mb-4 animate-pulse">
+              <UserCheck className="w-8 h-8 text-brand-primary" />
+            </div>
+            <h3 className="text-xl font-black text-white mb-2">Vote Submitted!</h3>
+            <p className="text-xs text-slate-400">
+              Keep your vote secret! Waiting for other players to finish voting...
+            </p>
+            {isHost && (
+              <div className="mt-6 pt-4 border-t border-white/5 text-[10px] text-slate-500 font-extrabold uppercase tracking-widest">
+                Progress: {Object.keys(votes).length} / {onlinePlayers.length} Voted
+              </div>
+            )}
+          </Card>
+        </div>
+      </div>
+    );
+  }
 
   // Filter out the active voter to prevent self-voting
   const candidates = players.filter(p => p.id !== voterId);
@@ -38,7 +69,7 @@ export const VotingPage: React.FC = () => {
         <div className="text-center">
           <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-brand-primary/15 text-brand-primary border border-brand-primary/20 mb-3 uppercase tracking-widest">
             <UserCheck className="w-3.5 h-3.5" />
-            Voter {currentVoterIndex + 1} of {playerOrder.length}
+            {isMultiplayer ? 'Secret Ballot' : `Voter ${currentVoterIndex + 1} of ${playerOrder.length}`}
           </div>
           
           <div className="flex items-center justify-center gap-2 mt-1">
