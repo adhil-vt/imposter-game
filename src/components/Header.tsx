@@ -102,7 +102,7 @@ export const Header: React.FC<HeaderProps> = ({ showHelp = true }) => {
         {gameState !== 'HOME' && (
           <button
             onClick={handleHomeClick}
-            className="p-2.5 rounded-xl bg-white/5 border border-white/10 text-slate-400 hover:text-white hover:bg-white/10 hover:border-white/20 transition-all duration-300"
+            className="p-2.5 rounded-xl bg-white/5 border border-white/10 text-slate-400 hover:text-white hover:bg-white/10 hover:border-white/20 transition-all duration-300 sm:flex hidden"
             title="Return to Home"
           >
             <Home className="w-4 h-4" />
@@ -217,6 +217,17 @@ export const Header: React.FC<HeaderProps> = ({ showHelp = true }) => {
             </div>
           </div>
         </div>
+      )}
+      {/* Mobile-only Home Button positioned below the right side of the navbar */}
+      {gameState !== 'HOME' && (
+        <button
+          onClick={handleHomeClick}
+          className="absolute right-6 top-[76px] z-30 px-3.5 py-2 rounded-xl bg-brand-dark/95 border border-white/10 text-slate-300 hover:text-white hover:bg-white/5 hover:border-white/20 transition-all duration-300 shadow-lg flex items-center gap-1.5 text-xs font-extrabold backdrop-blur-md sm:hidden animate-fade-in-up active:scale-95 cursor-pointer"
+          title="Return to Home"
+        >
+          <Home className="w-3.5 h-3.5 text-brand-primary" />
+          <span>Home</span>
+        </button>
       )}
     </header>
   );
