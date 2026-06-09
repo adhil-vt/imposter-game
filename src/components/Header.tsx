@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useGame, PALETTES } from '../context/GameContext';
-import { Home, HelpCircle, Volume2, VolumeX, User, Palette, Sun, Moon, Check } from 'lucide-react';
+import { Home, HelpCircle, Volume2, VolumeX, User, Palette, Sun, Moon, Check, MessageSquare } from 'lucide-react';
 import { playClick } from '../utils/sounds';
 
 interface HeaderProps {
@@ -18,7 +18,8 @@ export const Header: React.FC<HeaderProps> = ({ showHelp = true }) => {
     themeMode,
     setThemeMode,
     themePaletteId,
-    setThemePaletteId
+    setThemePaletteId,
+    isMultiplayer
   } = useGame();
 
   const [showThemePanel, setShowThemePanel] = useState(false);
@@ -218,16 +219,33 @@ export const Header: React.FC<HeaderProps> = ({ showHelp = true }) => {
           </div>
         </div>
       )}
-      {/* Mobile-only Home Button positioned below the right side of the navbar */}
+      {/* Mobile-only Sub-Navbar Buttons (Home, Chat shortcut) */}
       {gameState !== 'HOME' && (
-        <button
-          onClick={handleHomeClick}
-          className="absolute right-6 top-[76px] z-30 px-3.5 py-2 rounded-xl bg-brand-dark/95 border border-white/10 text-slate-300 hover:text-white hover:bg-white/5 hover:border-white/20 transition-all duration-300 shadow-lg flex items-center gap-1.5 text-xs font-extrabold backdrop-blur-md sm:hidden animate-fade-in-up active:scale-95 cursor-pointer"
-          title="Return to Home"
-        >
-          <Home className="w-3.5 h-3.5 text-brand-primary" />
-          <span>Home</span>
-        </button>
+        <div className="absolute right-6 top-[76px] z-30 flex gap-2 sm:hidden">
+          {/* Chat Shortcut Button (only in multiplayer lobby) */}
+          {gameState === 'SETUP' && isMultiplayer && (
+            <button
+              onClick={() => {
+                playClick();
+                document.getElementById('lobby-chat')?.scrollIntoView({ behavior: 'smooth' });
+              }}
+              className="px-3.5 py-2 rounded-xl bg-brand-dark/95 border border-white/10 text-slate-300 hover:text-white hover:bg-white/5 hover:border-white/20 transition-all duration-300 shadow-lg flex items-center gap-1.5 text-xs font-extrabold backdrop-blur-md animate-fade-in-up active:scale-95 cursor-pointer"
+              title="Scroll to Chat"
+            >
+              <MessageSquare className="w-3.5 h-3.5 text-brand-secondary" />
+              <span>Chat</span>
+            </button>
+          )}
+
+          <button
+            onClick={handleHomeClick}
+            className="px-3.5 py-2 rounded-xl bg-brand-dark/95 border border-white/10 text-slate-300 hover:text-white hover:bg-white/5 hover:border-white/20 transition-all duration-300 shadow-lg flex items-center gap-1.5 text-xs font-extrabold backdrop-blur-md animate-fade-in-up active:scale-95 cursor-pointer"
+            title="Return to Home"
+          >
+            <Home className="w-3.5 h-3.5 text-brand-primary" />
+            <span>Home</span>
+          </button>
+        </div>
       )}
     </header>
   );

@@ -16,14 +16,14 @@ export const Button: React.FC<ButtonProps> = ({
   className = '',
   ...props
 }) => {
-  const baseStyles = 'inline-flex items-center justify-center font-semibold rounded-2xl transition-all duration-300 active:scale-[0.98] disabled:opacity-50 disabled:pointer-events-none focus:outline-none focus:ring-2 focus:ring-brand-primary/50 focus:ring-offset-2 focus:ring-offset-brand-dark';
+  const baseStyles = 'inline-flex items-center justify-center font-semibold rounded-2xl transition-all duration-300 active:scale-[0.98] disabled:opacity-50 disabled:pointer-events-none focus:outline-none focus:ring-2 focus:ring-brand-primary/50 focus:ring-offset-2 focus:ring-offset-brand-dark bg-no-repeat';
   
   const variants = {
-    primary: 'bg-gradient-to-r from-brand-primary to-violet-600 text-white shadow-lg shadow-brand-primary/25 hover:shadow-brand-primary/40 hover:brightness-110 border border-white/10',
-    secondary: 'bg-gradient-to-r from-brand-secondary to-pink-600 text-white shadow-lg shadow-brand-secondary/25 hover:shadow-brand-secondary/40 hover:brightness-110 border border-white/10',
+    primary: 'bg-gradient-to-r from-brand-primary to-violet-600 text-white shadow-lg shadow-brand-primary/25 hover:shadow-brand-primary/40 hover:brightness-110',
+    secondary: 'bg-gradient-to-r from-brand-secondary to-pink-600 text-white shadow-lg shadow-brand-secondary/25 hover:shadow-brand-secondary/40 hover:brightness-110',
     glass: 'bg-white/5 border border-white/10 text-slate-200 hover:bg-white/10 hover:text-white backdrop-blur-md',
-    success: 'bg-gradient-to-r from-emerald-500 to-brand-accent text-white shadow-lg shadow-brand-accent/25 hover:shadow-brand-accent/40 border border-white/10',
-    danger: 'bg-gradient-to-r from-red-500 to-brand-danger text-white shadow-lg shadow-brand-danger/25 hover:shadow-brand-danger/40 border border-white/10',
+    success: 'bg-gradient-to-r from-emerald-500 to-brand-accent text-white shadow-lg shadow-brand-accent/25 hover:shadow-brand-accent/40',
+    danger: 'bg-gradient-to-r from-red-500 to-brand-danger text-white shadow-lg shadow-brand-danger/25 hover:shadow-brand-danger/40',
     'primary-glass': 'bg-brand-primary/10 border border-brand-primary/20 text-slate-200 hover:bg-brand-primary/20 hover:border-brand-primary/40 hover:text-white backdrop-blur-md',
     'secondary-glass': 'bg-brand-secondary/10 border border-brand-secondary/20 text-slate-200 hover:bg-brand-secondary/20 hover:border-brand-secondary/40 hover:text-white backdrop-blur-md',
   };

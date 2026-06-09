@@ -292,7 +292,7 @@ export const CreateGamePage: React.FC = () => {
   );
 
   const lobbyChatCard = (
-    <Card className="p-5 border-white/5 bg-brand-card/45 flex flex-col h-[320px] justify-between">
+    <Card id="lobby-chat" className="p-5 border-white/5 bg-brand-card/45 flex flex-col h-[320px] justify-between">
       {/* Header */}
       <div className="border-b border-white/5 pb-2.5 flex justify-between items-center select-none">
         <span className="text-xs font-bold text-slate-400 tracking-wider uppercase flex items-center gap-2">
@@ -394,8 +394,8 @@ export const CreateGamePage: React.FC = () => {
   );
 
   return (
-    <div className="flex flex-col items-center justify-center min-h-[calc(100vh-80px)] px-6 py-6 relative">
-      <div className={`w-full ${isMultiplayer ? 'max-w-4xl grid grid-cols-1 md:grid-cols-2 gap-6' : 'max-w-lg flex flex-col gap-6'} z-10`}>
+    <div className="flex flex-col items-center justify-center min-h-[calc(100vh-80px)] px-4 sm:px-6 py-6 relative">
+      <div className={`w-full ${isMultiplayer ? 'max-w-4xl grid grid-cols-1 lg:grid-cols-2 gap-6' : 'max-w-lg flex flex-col gap-6'} z-10`}>
         
         {/* Settings Column */}
         <div className="flex flex-col gap-6">
