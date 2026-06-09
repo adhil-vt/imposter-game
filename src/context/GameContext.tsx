@@ -234,6 +234,12 @@ interface GameContextType {
   unreadChatCount: number;
   sendChatMessage: (text: string) => void;
   kickPlayer: (playerId: string) => void;
+  isLobbyAdmin: boolean;
+  lobbyAdminId: string;
+  toggleMutePlayer: (playerId: string) => void;
+  mutedPlayerIds: string[];
+  banPlayer: (playerId: string) => void;
+  transferHost: (playerId: string) => void;
 }
 
 const GameContext = createContext<GameContextType | undefined>(undefined);
@@ -438,6 +444,31 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [timerSeconds, setTimerSeconds] = useState<number>(30);
   const [timerActive, setTimerActive] = useState<boolean>(false);
 
+  const [lobbyAdminId, setLobbyAdminId] = useState<string>('');
+  const isLobbyAdmin = isMultiplayer ? (onlinePlayers.find(p => p.id === myPlayerId)?.isAdmin || false) : true;
+  const [mutedPlayerIds, setMutedPlayerIds] = useState<string[]>([]);
+  
+  const toggleMutePlayer = (playerId: string) => {
+    playClick();
+    setMutedPlayerIds(prev => 
+      prev.includes(playerId) ? prev.filter(id => id !== playerId) : [...prev, playerId]
+    );
+  };
+
+  // Sync lobby settings across multiplayer network if we are the admin
+  useEffect(() => {
+    if (isMultiplayer && isLobbyAdmin) {
+      multiplayer.send({
+        type: 'SETTINGS_UPDATE',
+        difficulty,
+        selectedCategories,
+        impostorKnowsRole,
+        randomizeOrder,
+        hintsEnabled
+      });
+    }
+  }, [difficulty, selectedCategories, impostorKnowsRole, randomizeOrder, hintsEnabled, isMultiplayer, isLobbyAdmin]);
+
   // Chat states
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
   const [isChatOpen, setIsChatOpen] = useState<boolean>(false);
@@ -478,26 +509,111 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const kickPlayer = (playerId: string) => {
-    if (isMultiplayer && isHost) {
-      const kickedPlayer = onlinePlayers.find(p => p.id === playerId);
-      if (kickedPlayer) {
-        kickedPlayersRef.current.add(playerId);
-        multiplayer.kickPlayer(playerId);
-        
+    if (isMultiplayer) {
+      if (isHost) {
+        const kickedPlayer = onlinePlayers.find(p => p.id === playerId);
+        if (kickedPlayer) {
+          kickedPlayersRef.current.add(playerId);
+          multiplayer.kickPlayer(playerId);
+          
+          const systemMsg: ChatMessage = {
+            id: `sys_${Date.now()}_${Math.random()}`,
+            senderId: 'system',
+            senderName: 'System',
+            senderAvatar: '🤖',
+            text: `${kickedPlayer.name} was kicked from the room.`,
+            timestamp: Date.now(),
+            isSystem: true
+          };
+          setChatMessages(prev => [...prev, systemMsg]);
+          
+          multiplayer.send({
+            type: 'CHAT',
+            message: systemMsg
+          });
+        }
+      } else {
+        multiplayer.send({
+          type: 'KICK_REQUEST',
+          targetId: playerId
+        });
+      }
+    }
+  };
+
+  const banPlayer = (playerId: string) => {
+    if (isMultiplayer) {
+      if (isHost) {
+        const bannedPlayer = onlinePlayers.find(p => p.id === playerId);
+        if (bannedPlayer) {
+          kickedPlayersRef.current.add(playerId);
+          multiplayer.banPlayer(playerId);
+          
+          const systemMsg: ChatMessage = {
+            id: `sys_${Date.now()}_${Math.random()}`,
+            senderId: 'system',
+            senderName: 'System',
+            senderAvatar: '🚫',
+            text: `${bannedPlayer.name} was banned from the room.`,
+            timestamp: Date.now(),
+            isSystem: true
+          };
+          setChatMessages(prev => [...prev, systemMsg]);
+          
+          multiplayer.send({
+            type: 'CHAT',
+            message: systemMsg
+          });
+        }
+      } else {
+        multiplayer.send({
+          type: 'BAN_REQUEST',
+          targetId: playerId
+        });
+      }
+    }
+  };
+
+  const transferHost = (playerId: string) => {
+    if (isMultiplayer) {
+      if (isHost) {
+        setLobbyAdminId(playerId);
+        setOnlinePlayers(prev => {
+          const next = prev.map(p => ({
+            ...p,
+            isAdmin: p.id === playerId
+          }));
+          multiplayer.send({
+            type: 'LOBBY_UPDATE',
+            players: next
+          });
+          return next;
+        });
+
+        const newAdminName = onlinePlayers.find(p => p.id === playerId)?.name || 'Someone';
         const systemMsg: ChatMessage = {
           id: `sys_${Date.now()}_${Math.random()}`,
           senderId: 'system',
           senderName: 'System',
-          senderAvatar: '🤖',
-          text: `${kickedPlayer.name} was kicked from the room.`,
+          senderAvatar: '👑',
+          text: `${newAdminName} is now the Lobby Host.`,
           timestamp: Date.now(),
           isSystem: true
         };
         setChatMessages(prev => [...prev, systemMsg]);
-        
         multiplayer.send({
           type: 'CHAT',
           message: systemMsg
+        });
+
+        multiplayer.send({
+          type: 'TRANSFER_HOST',
+          newAdminId: playerId
+        });
+      } else {
+        multiplayer.send({
+          type: 'TRANSFER_HOST',
+          newAdminId: playerId
         });
       }
     }
@@ -571,6 +687,100 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
     switch (msg.type) {
       case 'LOBBY_UPDATE':
         setOnlinePlayers(msg.players);
+        const admin = msg.players.find(p => p.isAdmin);
+        if (admin) {
+          setLobbyAdminId(admin.id);
+        }
+        break;
+
+      case 'SETTINGS_UPDATE':
+        if (isHost) {
+          const sender = onlinePlayersRef.current.find(p => p.id === _senderId);
+          if (sender?.isAdmin) {
+            setDifficulty(msg.difficulty);
+            setSelectedCategories(msg.selectedCategories);
+            setImpostorKnowsRole(msg.impostorKnowsRole);
+            setRandomizeOrder(msg.randomizeOrder);
+            setHintsEnabled(msg.hintsEnabled);
+            multiplayer.send(msg);
+          }
+        } else {
+          setDifficulty(msg.difficulty);
+          setSelectedCategories(msg.selectedCategories);
+          setImpostorKnowsRole(msg.impostorKnowsRole);
+          setRandomizeOrder(msg.randomizeOrder);
+          setHintsEnabled(msg.hintsEnabled);
+        }
+        break;
+
+      case 'TRANSFER_HOST':
+        const processTransferHost = (newAdminId: string) => {
+          setLobbyAdminId(newAdminId);
+          setOnlinePlayers(prev => {
+            const next = prev.map(p => ({
+              ...p,
+              isAdmin: p.id === newAdminId
+            }));
+            return next;
+          });
+          const newAdminName = onlinePlayersRef.current.find(p => p.id === newAdminId)?.name || 'Someone';
+          const systemMsg: ChatMessage = {
+            id: `sys_${Date.now()}_${Math.random()}`,
+            senderId: 'system',
+            senderName: 'System',
+            senderAvatar: '👑',
+            text: `${newAdminName} is now the Lobby Host.`,
+            timestamp: Date.now(),
+            isSystem: true
+          };
+          setChatMessages(prev => [...prev, systemMsg]);
+        };
+
+        if (isHost) {
+          const sender = onlinePlayersRef.current.find(p => p.id === _senderId);
+          if (_senderId === myPlayerId || sender?.isAdmin) {
+            processTransferHost(msg.newAdminId);
+            multiplayer.send(msg);
+          }
+        } else {
+          processTransferHost(msg.newAdminId);
+        }
+        break;
+
+      case 'KICK_REQUEST':
+        if (isHost) {
+          const sender = onlinePlayersRef.current.find(p => p.id === _senderId);
+          if (sender?.isAdmin) {
+            kickPlayer(msg.targetId);
+          }
+        }
+        break;
+
+      case 'BAN_REQUEST':
+        if (isHost) {
+          const sender = onlinePlayersRef.current.find(p => p.id === _senderId);
+          if (sender?.isAdmin) {
+            banPlayer(msg.targetId);
+          }
+        }
+        break;
+
+      case 'START_GAME_REQUEST':
+        if (isHost) {
+          const sender = onlinePlayersRef.current.find(p => p.id === _senderId);
+          if (sender?.isAdmin) {
+            startGame();
+          }
+        }
+        break;
+
+      case 'RESTART_GAME_REQUEST':
+        if (isHost) {
+          const sender = onlinePlayersRef.current.find(p => p.id === _senderId);
+          if (sender?.isAdmin) {
+            restartGame();
+          }
+        }
         break;
 
       case 'START_GAME':
@@ -714,9 +924,9 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const handlePlayerDisconnected = (playerId: string) => {
-    if (kickedPlayersRef.current.has(playerId)) {
+    const wasKicked = kickedPlayersRef.current.has(playerId);
+    if (wasKicked) {
       kickedPlayersRef.current.delete(playerId);
-      return;
     }
 
     let disconnectedName = 'Someone';
@@ -730,6 +940,8 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
       });
       return next;
     });
+
+    if (wasKicked) return;
 
     const systemMsg: ChatMessage = {
       id: `sys_${Date.now()}_${Math.random()}`,
@@ -767,9 +979,11 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
         id: `host_${Date.now()}`,
         name: customNames[0] || 'Host',
         avatar: customAvatars[0] || '🦊',
-        isHost: true
+        isHost: true,
+        isAdmin: true
       };
       setMyPlayerId(hostPlayer.id);
+      setLobbyAdminId(hostPlayer.id);
       setOnlinePlayers([hostPlayer]);
       setMultiplayerStatus('connected');
       return code;
@@ -945,6 +1159,10 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const startGame = () => {
+    if (isMultiplayer && !isHost) {
+      multiplayer.send({ type: 'START_GAME_REQUEST' });
+      return;
+    }
     playClick();
     // 1. Select word pair
     const recentCommonWords = history.map(h => h.commonWord);
@@ -1207,6 +1425,10 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const restartGame = () => {
+    if (isMultiplayer && !isHost) {
+      multiplayer.send({ type: 'RESTART_GAME_REQUEST' });
+      return;
+    }
     playClick();
     if (isMultiplayer) {
       if (isHost) {
@@ -1342,6 +1564,12 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
         unreadChatCount,
         sendChatMessage,
         kickPlayer,
+        isLobbyAdmin,
+        lobbyAdminId,
+        toggleMutePlayer,
+        mutedPlayerIds,
+        banPlayer,
+        transferHost,
       }}
     >
       {children}

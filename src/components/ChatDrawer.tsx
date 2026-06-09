@@ -6,6 +6,7 @@ import { playClick } from '../utils/sounds';
 export const ChatDrawer: React.FC = () => {
   const {
     isMultiplayer,
+    gameState,
     myPlayerId,
     onlinePlayers,
     roomCode,
@@ -14,6 +15,7 @@ export const ChatDrawer: React.FC = () => {
     setIsChatOpen,
     unreadChatCount,
     sendChatMessage,
+    mutedPlayerIds,
   } = useGame();
 
   const [inputText, setInputText] = useState('');
@@ -43,7 +45,7 @@ export const ChatDrawer: React.FC = () => {
     }
   }, [chatMessages]);
 
-  if (!isMultiplayer) return null;
+  if (!isMultiplayer || gameState === 'SETUP') return null;
 
   const handleToggle = () => {
     playClick();
@@ -122,14 +124,16 @@ export const ChatDrawer: React.FC = () => {
           ref={messagesContainerRef}
           className="flex-1 overflow-y-auto p-4 flex flex-col gap-4 scrollbar-thin"
         >
-          {chatMessages.length === 0 ? (
+          {chatMessages.filter(msg => !mutedPlayerIds.includes(msg.senderId)).length === 0 ? (
             <div className="flex-1 flex flex-col items-center justify-center text-center opacity-40 p-4 select-none">
               <MessageSquare className="w-8 h-8 text-slate-500 mb-2 stroke-[1.5]" />
               <span className="text-xs font-bold text-slate-400">No messages yet</span>
               <span className="text-[10px] text-slate-500 mt-0.5">Discuss and chat with other players here!</span>
             </div>
           ) : (
-            chatMessages.map((msg) => {
+            chatMessages
+              .filter(msg => !mutedPlayerIds.includes(msg.senderId))
+              .map((msg) => {
               if (msg.isSystem) {
                 return (
                   <div

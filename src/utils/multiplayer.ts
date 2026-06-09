@@ -5,6 +5,7 @@ export interface NetworkPlayer {
   name: string;
   avatar: string;
   isHost?: boolean;
+  isAdmin?: boolean;
 }
 
 export type NetworkMessage =
@@ -18,12 +19,19 @@ export type NetworkMessage =
   | { type: 'PLAY_AGAIN' }
   | { type: 'STATE_CHANGE'; state: string }
   | { type: 'KICKED' }
-  | { type: 'CHAT'; message: any };
+  | { type: 'CHAT'; message: any }
+  | { type: 'SETTINGS_UPDATE'; difficulty: any; selectedCategories: any[]; impostorKnowsRole: boolean; randomizeOrder: boolean; hintsEnabled: boolean }
+  | { type: 'TRANSFER_HOST'; newAdminId: string }
+  | { type: 'KICK_REQUEST'; targetId: string }
+  | { type: 'BAN_REQUEST'; targetId: string }
+  | { type: 'START_GAME_REQUEST' }
+  | { type: 'RESTART_GAME_REQUEST' };
 
 class MultiplayerService {
   private peer: Peer | null = null;
   private connections: Record<string, DataConnection> = {};
   private onMessageCallback: ((senderId: string, msg: NetworkMessage) => void) | null = null;
+  private bannedIds: Set<string> = new Set();
 
   public isHost: boolean = false;
   public roomCode: string = '';
@@ -57,6 +65,15 @@ class MultiplayerService {
       });
 
       this.peer.on('connection', (conn) => {
+        // Reject banned players immediately
+        if (this.bannedIds.has(conn.peer)) {
+          conn.on('open', () => {
+            conn.send({ type: 'KICKED' });
+            setTimeout(() => conn.close(), 500);
+          });
+          return;
+        }
+
         // Handle incoming connection from a guest player
         conn.on('open', () => {
           this.connections[conn.peer] = conn;
@@ -191,6 +208,13 @@ class MultiplayerService {
     }
   }
 
+  public banPlayer(playerId: string) {
+    if (this.isHost) {
+      this.bannedIds.add(playerId);
+      this.kickPlayer(playerId);
+    }
+  }
+
   public disconnect() {
     Object.values(this.connections).forEach((conn) => conn.close());
     this.connections = {};
@@ -198,6 +222,7 @@ class MultiplayerService {
       this.peer.destroy();
       this.peer = null;
     }
+    this.bannedIds.clear();
     this.isHost = false;
     this.roomCode = '';
     this.myPeerId = '';
