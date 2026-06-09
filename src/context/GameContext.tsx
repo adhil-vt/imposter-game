@@ -241,6 +241,7 @@ interface GameContextType {
   mutedPlayerIds: string[];
   banPlayer: (playerId: string) => void;
   transferHost: (playerId: string) => void;
+  updatePlayerName: (newName: string) => void;
 }
 
 const GameContext = createContext<GameContextType | undefined>(undefined);
@@ -634,6 +635,59 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
+  const updatePlayerName = (newName: string) => {
+    if (!newName.trim()) return;
+    const trimmed = newName.trim();
+    if (isMultiplayer) {
+      if (isHost) {
+        const oldPlayer = onlinePlayers.find(p => p.id === myPlayerId);
+        const oldName = oldPlayer?.name || 'Host';
+        
+        setOnlinePlayers(prev => {
+          const next = prev.map(p => p.id === myPlayerId ? { ...p, name: trimmed } : p);
+          multiplayer.send({
+            type: 'LOBBY_UPDATE',
+            players: next
+          });
+          return next;
+        });
+
+        setCustomNames(prev => {
+          const next = [...prev];
+          next[0] = trimmed;
+          return next;
+        });
+
+        const systemMsg: ChatMessage = {
+          id: `sys_${Date.now()}_${Math.random()}`,
+          senderId: 'system',
+          senderName: 'System',
+          senderAvatar: '✏️',
+          text: `${oldName} changed their name to ${trimmed}.`,
+          timestamp: Date.now(),
+          isSystem: true
+        };
+        setChatMessages(prev => [...prev, systemMsg]);
+        multiplayer.send({
+          type: 'CHAT',
+          message: systemMsg
+        });
+      } else {
+        multiplayer.send({
+          type: 'RENAME_PLAYER',
+          playerId: myPlayerId,
+          name: trimmed
+        });
+      }
+    } else {
+      setCustomNames(prev => {
+        const next = [...prev];
+        next[0] = trimmed;
+        return next;
+      });
+    }
+  };
+
   const isChatOpenRef = useRef(isChatOpen);
   const myPlayerIdRef = useRef(myPlayerId);
   const onlinePlayersRef = useRef(onlinePlayers);
@@ -700,6 +754,38 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
   // Handle incoming network messages
   const handleIncomingMessage = (_senderId: string, msg: NetworkMessage) => {
     switch (msg.type) {
+      case 'RENAME_PLAYER':
+        if (isHost) {
+          const oldPlayer = onlinePlayersRef.current.find(p => p.id === msg.playerId);
+          const oldName = oldPlayer?.name || 'Someone';
+          const trimmedNewName = msg.name.trim();
+
+          setOnlinePlayers(prev => {
+            const next = prev.map(p => p.id === msg.playerId ? { ...p, name: trimmedNewName } : p);
+            multiplayer.send({
+              type: 'LOBBY_UPDATE',
+              players: next
+            });
+            return next;
+          });
+
+          const systemMsg: ChatMessage = {
+            id: `sys_${Date.now()}_${Math.random()}`,
+            senderId: 'system',
+            senderName: 'System',
+            senderAvatar: '✏️',
+            text: `${oldName} changed their name to ${trimmedNewName}.`,
+            timestamp: Date.now(),
+            isSystem: true
+          };
+          setChatMessages(prev => [...prev, systemMsg]);
+          multiplayer.send({
+            type: 'CHAT',
+            message: systemMsg
+          });
+        }
+        break;
+
       case 'LOBBY_UPDATE':
         setOnlinePlayers(msg.players);
         const admin = msg.players.find(p => p.isAdmin);
@@ -823,6 +909,10 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
         if (isHost) {
           setPlayersWhoRevealed(prev => {
             const next = prev.includes(msg.playerId) ? prev : [...prev, msg.playerId];
+            multiplayer.send({
+              type: 'REVEAL_PROGRESS',
+              revealedPlayers: next
+            });
             if (next.length === onlinePlayersRef.current.length) {
               setGameState('CLUES');
               setTimerSeconds(30);
@@ -838,6 +928,10 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
             return next;
           });
         }
+        break;
+
+      case 'REVEAL_PROGRESS':
+        setPlayersWhoRevealed(msg.revealedPlayers);
         break;
 
       case 'TIMER_SYNC':
@@ -1596,6 +1690,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
         mutedPlayerIds,
         banPlayer,
         transferHost,
+        updatePlayerName,
       }}
     >
       {children}

@@ -14,6 +14,7 @@ export type NetworkMessage =
   | { type: 'LOBBY_UPDATE'; players: NetworkPlayer[] }
   | { type: 'START_GAME'; myPlayerId: string; players: any[]; playerOrder: string[]; commonWord: string; impostorWord: string; chosenCategory: string; activeWordPairHints: string[]; activePlayerVisualAid: any }
   | { type: 'REVEAL_COMPLETE'; playerId: string }
+  | { type: 'REVEAL_PROGRESS'; revealedPlayers: string[] }
   | { type: 'TIMER_SYNC'; activeClueIndex: number; timerSeconds: number; timerActive: boolean }
   | { type: 'VOTE_CAST'; voterId: string; votedId: string }
   | { type: 'GAME_OVER'; winner: 'CREWMATES' | 'IMPOSTOR'; voteStats: Record<string, number>; votes: Record<string, string> }
@@ -26,7 +27,8 @@ export type NetworkMessage =
   | { type: 'KICK_REQUEST'; targetId: string }
   | { type: 'BAN_REQUEST'; targetId: string }
   | { type: 'START_GAME_REQUEST' }
-  | { type: 'RESTART_GAME_REQUEST' };
+  | { type: 'RESTART_GAME_REQUEST' }
+  | { type: 'RENAME_PLAYER'; playerId: string; name: string };
 
 class MultiplayerService {
   private peer: Peer | null = null;

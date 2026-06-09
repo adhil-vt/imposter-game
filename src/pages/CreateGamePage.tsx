@@ -40,7 +40,8 @@ import {
   Flame,
   Copy,
   Send,
-  MessageSquare
+  MessageSquare,
+  Pencil
 } from 'lucide-react';
 
 export const CreateGamePage: React.FC = () => {
@@ -79,7 +80,8 @@ export const CreateGamePage: React.FC = () => {
     chatMessages,
     sendChatMessage,
     unreadChatCount,
-    setUnreadChatCount
+    setUnreadChatCount,
+    updatePlayerName
   } = useGame();
 
   const [copied, setCopied] = useState(false);
@@ -91,6 +93,8 @@ export const CreateGamePage: React.FC = () => {
   
   const [selectedModerationPlayer, setSelectedModerationPlayer] = useState<any | null>(null);
   const [chatInput, setChatInput] = useState('');
+  const [isEditingName, setIsEditingName] = useState(false);
+  const [editingNameVal, setEditingNameVal] = useState('');
   const chatContainerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -194,6 +198,13 @@ export const CreateGamePage: React.FC = () => {
 
   const isCustomCategoryEmpty = selectedCategories.includes('Custom') && selectedCategories.length === 1 && customWordPairs.length === 0;
 
+  const handleSaveName = () => {
+    if (editingNameVal.trim()) {
+      updatePlayerName(editingNameVal.trim());
+    }
+    setIsEditingName(false);
+  };
+
   const playersRosterCard = (
     <Card className="p-6 border-white/5 bg-brand-card/50 flex flex-col">
       <div className="flex justify-between items-center mb-3">
@@ -220,7 +231,12 @@ export const CreateGamePage: React.FC = () => {
               key={player.id} 
               onClick={() => {
                 playClick();
-                setSelectedModerationPlayer(player);
+                if (player.id === myPlayerId) {
+                  setEditingNameVal(player.name);
+                  setIsEditingName(true);
+                } else {
+                  setSelectedModerationPlayer(player);
+                }
               }}
               className="flex items-center justify-between bg-white/[0.02] border border-white/5 p-3 rounded-xl transition-all duration-300 hover:bg-white/[0.04] cursor-pointer"
             >
@@ -228,9 +244,40 @@ export const CreateGamePage: React.FC = () => {
                 <span className="w-9 h-9 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center text-lg shadow-sm">
                   {player.avatar}
                 </span>
-                <span className="text-sm font-bold text-slate-200">
-                  {player.name} {player.id === myPlayerId && <span className="text-[10px] text-slate-500 font-bold italic">(You)</span>}
-                </span>
+                {player.id === myPlayerId ? (
+                  isEditingName ? (
+                    <input
+                      type="text"
+                      maxLength={14}
+                      value={editingNameVal}
+                      onChange={(e) => setEditingNameVal(e.target.value)}
+                      onBlur={handleSaveName}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          handleSaveName();
+                        } else if (e.key === 'Escape') {
+                          setIsEditingName(false);
+                        }
+                      }}
+                      onClick={(e) => e.stopPropagation()}
+                      autoFocus
+                      className="bg-transparent text-sm font-bold text-white border-b border-brand-primary/50 focus:outline-none w-32 px-0.5"
+                    />
+                  ) : (
+                    <span 
+                      className="text-sm font-bold text-slate-200 flex items-center gap-1.5 hover:text-white transition-colors"
+                      title="Click to rename"
+                    >
+                      {player.name}
+                      <span className="text-[10px] text-slate-500 font-bold italic">(You)</span>
+                      <Pencil className="w-3.5 h-3.5 text-slate-400 hover:text-brand-secondary transition-colors" />
+                    </span>
+                  )
+                ) : (
+                  <span className="text-sm font-bold text-slate-200">
+                    {player.name}
+                  </span>
+                )}
               </div>
               {player.isAdmin ? (
                 <span className="text-[9px] bg-brand-primary/20 border border-brand-primary/30 text-brand-primary px-2.5 py-0.5 rounded-full font-black uppercase tracking-wider animate-pulse">

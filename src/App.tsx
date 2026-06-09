@@ -55,7 +55,7 @@ function GameContent() {
       <ConfirmModal />
 
       {/* Global Multiplayer Chat Panel */}
-      <ChatDrawer />
+      {gameState !== 'REVEAL' && <ChatDrawer />}
     </div>
   );
 }

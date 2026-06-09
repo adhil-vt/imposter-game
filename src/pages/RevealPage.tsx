@@ -3,6 +3,7 @@ import { useGame } from '../context/GameContext';
 import { Button } from '../components/Button';
 import { RevealCard } from '../components/RevealCard';
 import { Card } from '../components/Card';
+import { ChatDrawer } from '../components/ChatDrawer';
 import { ArrowRight, Eye, Sparkles } from 'lucide-react';
 
 export const RevealPage: React.FC = () => {
@@ -19,7 +20,6 @@ export const RevealPage: React.FC = () => {
     activePlayerVisualAid,
     hintsEnabled,
     isMultiplayer,
-    isLobbyAdmin,
     myPlayerId,
     playersWhoRevealed
   } = useGame();
@@ -62,23 +62,32 @@ export const RevealPage: React.FC = () => {
   // 1. Render Multiplayer Waiting View
   if (isMultiplayer && hasCompletedReveal) {
     return (
-      <div className="w-full my-auto flex flex-col items-center px-6 py-6 text-center animate-fade-in">
+      <div className="w-full flex-1 flex flex-col lg:flex-row gap-6 px-6 py-6 text-center animate-fade-in">
         <div className="ambient-glow-1 top-20 right-10 animate-float" />
-        <div className="w-full max-w-md flex flex-col gap-6 z-10">
-          <Card className="p-8 border-white/5 bg-brand-card/50">
-            <div className="w-16 h-16 rounded-full bg-brand-primary/10 border border-brand-primary/20 flex items-center justify-center text-3xl mx-auto mb-4 animate-bounce">
-              {activePlayer.avatar}
-            </div>
-            <h3 className="text-xl font-black text-white mb-2">Card Memorized!</h3>
-            <p className="text-xs text-slate-400">
-              Keep your word secret! Waiting for other players to finish viewing their cards...
-            </p>
-            {isLobbyAdmin && (
+
+        <div className="flex-1 flex items-center justify-center">
+          <div className="w-full max-w-md flex flex-col gap-6 z-10">
+            <Card className="p-8 border-white/5 bg-brand-card/50">
+              <div className="w-16 h-16 rounded-full bg-brand-primary/10 border border-brand-primary/20 flex items-center justify-center text-3xl mx-auto mb-4 animate-bounce">
+                {activePlayer.avatar}
+              </div>
+              <h3 className="text-xl font-black text-white mb-2">Card Memorized!</h3>
+              <p className="text-xs text-slate-400">
+                Keep your word secret! Waiting for other players to finish viewing their cards...
+              </p>
               <div className="mt-6 pt-4 border-t border-white/5 text-[10px] text-slate-500 font-extrabold uppercase tracking-widest">
                 Progress: {playersWhoRevealed.length} / {players.length} Ready
               </div>
-            )}
-          </Card>
+            </Card>
+          </div>
+        </div>
+
+        <div className="hidden lg:flex w-full max-w-[380px] shrink-0">
+          <ChatDrawer embedded />
+        </div>
+
+        <div className="lg:hidden">
+          <ChatDrawer />
         </div>
       </div>
     );
@@ -125,66 +134,75 @@ export const RevealPage: React.FC = () => {
 
   // 2. Render active player screen
   return (
-    <div className="w-full my-auto flex flex-col items-center px-6 py-6 text-center animate-fade-in">
+    <div className="w-full flex-1 flex flex-col lg:flex-row gap-6 px-6 py-6 text-center animate-fade-in">
       <div className="ambient-glow-2 bottom-20 left-10 animate-float-delayed" />
-      
-      <div className="w-full max-w-md flex flex-col gap-8 z-10">
-        
-        {/* Title indicating who should look */}
-        <div className="flex flex-col items-center">
-          <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-brand-primary/15 text-brand-primary border border-brand-primary/20 mb-4 uppercase tracking-widest">
-            <Sparkles className="w-3.5 h-3.5" />
-            Player {currentRevealIndex + 1} of {playerOrder.length}
-          </div>
-          
-          <div className="w-16 h-16 rounded-full bg-white/5 border border-white/10 flex items-center justify-center text-3xl mb-2">
-            {activePlayer.avatar}
-          </div>
-          
-          <h2 className="text-3xl font-black text-white tracking-wide">
-            {activePlayer.name}
-          </h2>
-          <p className="text-sm text-slate-400 mt-1">
-            Reveal your secret word below.
-          </p>
-        </div>
 
-        {/* 3D Flip Card with hints and visual aid context */}
-        <RevealCard 
-          word={activePlayer.word} 
-          isRevealed={isWordRevealed} 
-          onToggle={isWordRevealed ? handleHideWord : revealWord} 
-          roleBadge={roleBadge}
-          hints={activeWordPairHints}
-          visualAid={activePlayerVisualAid}
-          hintsEnabled={hintsEnabled}
-        />
+      <div className="flex-1 flex items-center justify-center">
+        <div className="w-full max-w-md flex flex-col gap-8 z-10">
+          {/* Title indicating who should look */}
+          <div className="flex flex-col items-center">
+            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-brand-primary/15 text-brand-primary border border-brand-primary/20 mb-4 uppercase tracking-widest">
+              <Sparkles className="w-3.5 h-3.5" />
+              Player {currentRevealIndex + 1} of {playerOrder.length}
+            </div>
 
-        {/* Buttons for ease of click */}
-        <div className="w-full">
-          {!isWordRevealed ? (
-            <Button
-              variant="primary"
-              size="lg"
-              fullWidth
-              onClick={revealWord}
-              className="py-4 rounded-2xl font-bold"
-            >
-              <Eye className="w-5 h-5 mr-2" />
-              Reveal My Word
-            </Button>
-          ) : (
-            <Button
-              variant="secondary"
-              size="lg"
-              fullWidth
-              onClick={handleHideWord}
-              className="py-4 rounded-2xl font-bold"
-            >
-              Hide Word & Continue
-            </Button>
-          )}
+            <div className="w-16 h-16 rounded-full bg-white/5 border border-white/10 flex items-center justify-center text-3xl mb-2">
+              {activePlayer.avatar}
+            </div>
+
+            <h2 className="text-3xl font-black text-white tracking-wide">
+              {activePlayer.name}
+            </h2>
+            <p className="text-sm text-slate-400 mt-1">
+              Reveal your secret word below.
+            </p>
+          </div>
+
+          {/* 3D Flip Card with hints and visual aid context */}
+          <RevealCard
+            word={activePlayer.word}
+            isRevealed={isWordRevealed}
+            onToggle={isWordRevealed ? handleHideWord : revealWord}
+            roleBadge={roleBadge}
+            hints={activeWordPairHints}
+            visualAid={activePlayerVisualAid}
+            hintsEnabled={hintsEnabled}
+          />
+
+          {/* Buttons for ease of click */}
+          <div className="w-full">
+            {!isWordRevealed ? (
+              <Button
+                variant="primary"
+                size="lg"
+                fullWidth
+                onClick={revealWord}
+                className="py-4 rounded-2xl font-bold"
+              >
+                <Eye className="w-5 h-5 mr-2" />
+                Reveal My Word
+              </Button>
+            ) : (
+              <Button
+                variant="secondary"
+                size="lg"
+                fullWidth
+                onClick={handleHideWord}
+                className="py-4 rounded-2xl font-bold"
+              >
+                Hide Word & Continue
+              </Button>
+            )}
+          </div>
         </div>
+      </div>
+
+      <div className="hidden lg:flex w-full max-w-[380px] shrink-0">
+        <ChatDrawer embedded />
+      </div>
+
+      <div className="lg:hidden">
+        <ChatDrawer />
       </div>
     </div>
   );
