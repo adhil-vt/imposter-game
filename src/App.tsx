@@ -44,7 +44,7 @@ function GameContent() {
       <Header />
       
       {/* Primary Page Wrapper */}
-      <main className="flex-1 w-full max-w-4xl mx-auto flex flex-col justify-center">
+      <main className="flex-1 w-full max-w-4xl mx-auto flex flex-col">
         {renderPage()}
       </main>
 

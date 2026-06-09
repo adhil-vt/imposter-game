@@ -78,7 +78,8 @@ export const CreateGamePage: React.FC = () => {
     mutedPlayerIds,
     chatMessages,
     sendChatMessage,
-    unreadChatCount
+    unreadChatCount,
+    setUnreadChatCount
   } = useGame();
 
   const [copied, setCopied] = useState(false);
@@ -97,6 +98,26 @@ export const CreateGamePage: React.FC = () => {
       chatContainerRef.current.scrollTop = chatContainerRef.current.scrollHeight;
     }
   }, [chatMessages]);
+
+  const [showScrollButton, setShowScrollButton] = useState(true);
+
+  useEffect(() => {
+    const handleScroll = () => {
+      const lobbyChat = document.getElementById('lobby-chat');
+      if (lobbyChat) {
+        const rect = lobbyChat.getBoundingClientRect();
+        if (rect.top < window.innerHeight) {
+          setShowScrollButton(false);
+          setUnreadChatCount(0);
+        } else {
+          setShowScrollButton(true);
+        }
+      }
+    };
+    window.addEventListener('scroll', handleScroll);
+    handleScroll();
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, [setUnreadChatCount]);
 
   const handleCopyCode = () => {
     playClick();
@@ -364,38 +385,45 @@ export const CreateGamePage: React.FC = () => {
       </div>
 
       {/* Form */}
-      <form
-        onSubmit={(e) => {
-          e.preventDefault();
-          if (!chatInput.trim()) return;
-          playClick();
-          sendChatMessage(chatInput);
-          setChatInput('');
-        }}
-        className="border-t border-white/5 pt-3 flex items-center gap-2 select-none"
-      >
-        <input
-          type="text"
-          maxLength={100}
-          value={chatInput}
-          onChange={(e) => setChatInput(e.target.value)}
-          placeholder="Type a message..."
-          className="flex-1 bg-white/5 border border-white/10 rounded-xl px-4 py-2 text-xs font-bold text-slate-200 focus:outline-none focus:border-brand-secondary placeholder-slate-600"
-        />
-        <button
-          type="submit"
-          disabled={!chatInput.trim()}
-          className="p-2 rounded-xl bg-brand-secondary border border-brand-secondary text-white hover:scale-105 active:scale-95 disabled:opacity-40 disabled:pointer-events-none transition-all shadow-md shadow-brand-secondary/10 flex items-center justify-center cursor-pointer"
-          title="Send Message"
-        >
-          <Send className="w-3.5 h-3.5" />
-        </button>
-      </form>
+      {(() => {
+        const myOnlinePlayer = onlinePlayers.find(p => p.id === myPlayerId);
+        const isRestricted = myOnlinePlayer?.isMuted || false;
+        return (
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              if (!chatInput.trim() || isRestricted) return;
+              playClick();
+              sendChatMessage(chatInput);
+              setChatInput('');
+            }}
+            className="border-t border-white/5 pt-3 flex items-center gap-2 select-none"
+          >
+            <input
+              type="text"
+              maxLength={100}
+              value={chatInput}
+              onChange={(e) => setChatInput(e.target.value)}
+              disabled={isRestricted}
+              placeholder={isRestricted ? "You are restricted from chatting by host" : "Type a message..."}
+              className="flex-1 bg-white/5 border border-white/10 rounded-xl px-4 py-2 text-xs font-bold text-slate-200 focus:outline-none focus:border-brand-secondary placeholder-slate-600 disabled:opacity-50 disabled:pointer-events-none"
+            />
+            <button
+              type="submit"
+              disabled={!chatInput.trim() || isRestricted}
+              className="p-2 rounded-xl bg-brand-secondary border border-brand-secondary text-white hover:scale-105 active:scale-95 disabled:opacity-40 disabled:pointer-events-none transition-all shadow-md shadow-brand-secondary/10 flex items-center justify-center cursor-pointer"
+              title="Send Message"
+            >
+              <Send className="w-3.5 h-3.5" />
+            </button>
+          </form>
+        );
+      })()}
     </Card>
   );
 
   return (
-    <div className="flex flex-col items-center justify-center min-h-[calc(100vh-80px)] px-4 sm:px-6 py-6 relative">
+    <div className="w-full my-auto flex flex-col items-center px-4 sm:px-6 py-6 relative">
       <div className={`w-full ${isMultiplayer ? 'max-w-4xl grid grid-cols-1 lg:grid-cols-2 gap-6' : 'max-w-lg flex flex-col gap-6'} z-10`}>
         
         {/* Settings Column */}
@@ -875,11 +903,12 @@ export const CreateGamePage: React.FC = () => {
       </div>
 
       {/* Mobile Floating Chat Shortcut Button */}
-      {isMultiplayer && (
+      {isMultiplayer && showScrollButton && (
         <button
           onClick={() => {
             playClick();
             document.getElementById('lobby-chat')?.scrollIntoView({ behavior: 'smooth' });
+            setUnreadChatCount(0);
           }}
           className="fixed bottom-6 right-6 z-40 w-14 h-14 rounded-full bg-gradient-to-tr from-brand-secondary to-pink-600 border border-white/10 hover:scale-105 active:scale-95 transition-all shadow-lg flex items-center justify-center cursor-pointer glow-secondary select-none sm:hidden animate-fade-in-up"
           title="Scroll to Chat"

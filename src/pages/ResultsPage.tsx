@@ -18,7 +18,7 @@ export const ResultsPage: React.FC = () => {
     restartGame,
     resetGame,
     isMultiplayer,
-    isHost,
+    isLobbyAdmin,
     leaveRoom,
   } = useGame();
 
@@ -67,7 +67,7 @@ export const ResultsPage: React.FC = () => {
   const crewmatesWin = winner === 'CREWMATES';
 
   return (
-    <div className="flex flex-col items-center justify-center min-h-[calc(100vh-80px)] px-6 py-8 relative">
+    <div className="w-full my-auto flex flex-col items-center px-6 py-8 relative">
       {/* Dynamic ambient glow based on who won */}
       <div className={`absolute w-[350px] h-[350px] rounded-full blur-[90px] pointer-events-none top-10 ${
         crewmatesWin ? 'bg-brand-accent/10 animate-float' : 'bg-brand-secondary/10 animate-float'
@@ -212,7 +212,7 @@ export const ResultsPage: React.FC = () => {
 
         {/* Controls */}
         <div className="flex flex-col gap-3 w-full">
-          {isMultiplayer && !isHost && (
+          {isMultiplayer && !isLobbyAdmin && (
             <div className="text-center py-3 px-4 rounded-2xl bg-white/5 border border-white/5 text-slate-400 font-bold text-sm flex items-center justify-center gap-2 animate-pulse mb-2">
               <RefreshCw className="w-4 h-4 animate-spin text-brand-primary" />
               Waiting for Host to start next round...
@@ -229,7 +229,7 @@ export const ResultsPage: React.FC = () => {
               {isMultiplayer ? 'Leave Room' : 'New Game'}
             </Button>
 
-            {(!isMultiplayer || isHost) && (
+            {(!isMultiplayer || isLobbyAdmin) && (
               <Button 
                 variant="primary" 
                 onClick={restartGame} 

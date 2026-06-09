@@ -45,7 +45,8 @@ export const ChatDrawer: React.FC = () => {
     }
   }, [chatMessages]);
 
-  if (!isMultiplayer || gameState === 'SETUP') return null;
+  const activeGameStates = ['REVEAL', 'CLUES', 'VOTING', 'RESULTS'];
+  if (!isMultiplayer || !activeGameStates.includes(gameState)) return null;
 
   const handleToggle = () => {
     playClick();
@@ -73,7 +74,7 @@ export const ChatDrawer: React.FC = () => {
       {/* Floating Toggle Button */}
       <button
         onClick={handleToggle}
-        className="fixed bottom-6 right-6 z-40 w-14 h-14 rounded-full bg-gradient-to-tr from-brand-primary to-brand-secondary border border-white/10 hover:scale-105 active:scale-95 transition-all shadow-lg flex items-center justify-center cursor-pointer glow-primary select-none"
+        className="fixed bottom-6 right-6 z-40 w-14 h-14 rounded-full bg-gradient-to-tr from-brand-secondary to-pink-600 border border-white/10 hover:scale-105 active:scale-95 transition-all shadow-lg flex items-center justify-center cursor-pointer glow-secondary select-none animate-fade-in-up"
         title="Open Chat"
       >
         <MessageSquare className="w-6 h-6 text-white" />
@@ -185,27 +186,34 @@ export const ChatDrawer: React.FC = () => {
         </div>
 
         {/* Message Input Panel */}
-        <form
-          onSubmit={handleSend}
-          className="p-4 border-t border-white/5 bg-brand-dark/40 flex items-center gap-2 select-none"
-        >
-          <input
-            type="text"
-            maxLength={100}
-            value={inputText}
-            onChange={(e) => setInputText(e.target.value)}
-            placeholder="Type a message..."
-            className="flex-1 bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-xs font-bold text-slate-200 focus:outline-none focus:border-brand-primary placeholder-slate-600"
-          />
-          <button
-            type="submit"
-            disabled={!inputText.trim()}
-            className="p-2.5 rounded-xl bg-brand-primary border border-brand-primary text-white hover:scale-105 active:scale-95 disabled:opacity-40 disabled:pointer-events-none transition-all shadow-md shadow-brand-primary/10 flex items-center justify-center cursor-pointer shrink-0"
-            title="Send Message"
-          >
-            <Send className="w-4 h-4" />
-          </button>
-        </form>
+        {(() => {
+          const myOnlinePlayer = onlinePlayers.find(p => p.id === myPlayerId);
+          const isRestricted = myOnlinePlayer?.isMuted || false;
+          return (
+            <form
+              onSubmit={handleSend}
+              className="p-4 border-t border-white/5 bg-brand-dark/40 flex items-center gap-2 select-none"
+            >
+              <input
+                type="text"
+                maxLength={100}
+                value={inputText}
+                onChange={(e) => setInputText(e.target.value)}
+                disabled={isRestricted}
+                placeholder={isRestricted ? "You are restricted from chatting by host" : "Type a message..."}
+                className="flex-1 bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-xs font-bold text-slate-200 focus:outline-none focus:border-brand-primary placeholder-slate-600 disabled:opacity-50 disabled:pointer-events-none"
+              />
+              <button
+                type="submit"
+                disabled={!inputText.trim() || isRestricted}
+                className="p-2.5 rounded-xl bg-brand-primary border border-brand-primary text-white hover:scale-105 active:scale-95 disabled:opacity-40 disabled:pointer-events-none transition-all shadow-md shadow-brand-primary/10 flex items-center justify-center cursor-pointer shrink-0"
+                title="Send Message"
+              >
+                <Send className="w-4 h-4" />
+              </button>
+            </form>
+          );
+        })()}
       </div>
     </>
   );

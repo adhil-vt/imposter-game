@@ -232,6 +232,7 @@ interface GameContextType {
   isChatOpen: boolean;
   setIsChatOpen: (open: boolean) => void;
   unreadChatCount: number;
+  setUnreadChatCount: (count: number) => void;
   sendChatMessage: (text: string) => void;
   kickPlayer: (playerId: string) => void;
   isLobbyAdmin: boolean;
@@ -450,9 +451,23 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
   
   const toggleMutePlayer = (playerId: string) => {
     playClick();
-    setMutedPlayerIds(prev => 
-      prev.includes(playerId) ? prev.filter(id => id !== playerId) : [...prev, playerId]
-    );
+    if (isLobbyAdmin) {
+      setOnlinePlayers(prev => {
+        const next = prev.map(p => p.id === playerId ? { ...p, isMuted: !p.isMuted } : p);
+        multiplayer.send({
+          type: 'LOBBY_UPDATE',
+          players: next
+        });
+        return next;
+      });
+      setMutedPlayerIds(prev => 
+        prev.includes(playerId) ? prev.filter(id => id !== playerId) : [...prev, playerId]
+      );
+    } else {
+      setMutedPlayerIds(prev => 
+        prev.includes(playerId) ? prev.filter(id => id !== playerId) : [...prev, playerId]
+      );
+    }
   };
 
   // Sync lobby settings across multiplayer network if we are the admin
@@ -635,15 +650,15 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   }, [timerSeconds, timerActive]);
 
-  // Broadcast state change to guests when gameState changes on the host
+  // Broadcast state change to guests when gameState changes
   useEffect(() => {
-    if (isMultiplayer && isHost) {
+    if (isMultiplayer && (isHost || isLobbyAdmin)) {
       multiplayer.send({
         type: 'STATE_CHANGE',
         state: gameState
       });
     }
-  }, [gameState, isMultiplayer, isHost]);
+  }, [gameState, isMultiplayer, isHost, isLobbyAdmin]);
 
 
   // Clue Phase Timer countdown logic
@@ -826,9 +841,15 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
         break;
 
       case 'TIMER_SYNC':
-        setActiveClueIndex(msg.activeClueIndex);
-        setTimerSeconds(msg.timerSeconds);
-        setTimerActive(msg.timerActive);
+        const timerSender = onlinePlayersRef.current.find(p => p.id === _senderId);
+        if (!isHost || timerSender?.isAdmin) {
+          setActiveClueIndex(msg.activeClueIndex);
+          setTimerSeconds(msg.timerSeconds);
+          setTimerActive(msg.timerActive);
+          if (isHost) {
+            multiplayer.send(msg);
+          }
+        }
         break;
 
       case 'VOTE_CAST':
@@ -864,7 +885,10 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
         break;
 
       case 'STATE_CHANGE':
-        setGameState(msg.state as GameState);
+        const stateSender = onlinePlayersRef.current.find(p => p.id === _senderId);
+        if (!isHost || stateSender?.isAdmin) {
+          setGameState(msg.state as GameState);
+        }
         break;
 
       case 'KICKED':
@@ -1010,6 +1034,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setIsMultiplayer(true);
       setIsHost(false);
       setRoomCode(code);
+      setMyPlayerId(multiplayer.myPeerId);
       setMultiplayerStatus('connected');
     } catch (err) {
       setMultiplayerStatus('error');
@@ -1562,6 +1587,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
         isChatOpen,
         setIsChatOpen,
         unreadChatCount,
+        setUnreadChatCount,
         sendChatMessage,
         kickPlayer,
         isLobbyAdmin,

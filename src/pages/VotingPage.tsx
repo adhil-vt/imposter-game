@@ -11,7 +11,7 @@ export const VotingPage: React.FC = () => {
     currentVoterIndex,
     submitVote,
     isMultiplayer,
-    isHost,
+    isLobbyAdmin,
     myPlayerId,
     votes,
     onlinePlayers,
@@ -26,7 +26,7 @@ export const VotingPage: React.FC = () => {
 
   if (hasVoted) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-[calc(100vh-80px)] px-6 py-6 text-center animate-fade-in">
+      <div className="w-full my-auto flex flex-col items-center px-6 py-6 text-center animate-fade-in relative">
         <div className="ambient-glow-1 top-20 right-10 animate-float" />
         <div className="w-full max-w-md flex flex-col gap-6 z-10">
           <Card className="p-8 border-white/5 bg-brand-card/50">
@@ -37,7 +37,7 @@ export const VotingPage: React.FC = () => {
             <p className="text-xs text-slate-400">
               Keep your vote secret! Waiting for other players to finish voting...
             </p>
-            {isHost && (
+            {isLobbyAdmin && (
               <div className="mt-6 pt-4 border-t border-white/5 text-[10px] text-slate-500 font-extrabold uppercase tracking-widest">
                 Progress: {Object.keys(votes).length} / {onlinePlayers.length} Voted
               </div>
@@ -60,7 +60,7 @@ export const VotingPage: React.FC = () => {
   };
 
   return (
-    <div className="flex flex-col items-center justify-center min-h-[calc(100vh-80px)] px-6 py-6 animate-fade-in">
+    <div className="w-full my-auto flex flex-col items-center px-6 py-6 animate-fade-in relative">
       <div className="ambient-glow-2 bottom-20 left-10 animate-float-delayed" />
 
       <div className="w-full max-w-md flex flex-col gap-6 z-10">

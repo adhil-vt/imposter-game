@@ -19,7 +19,7 @@ export const RevealPage: React.FC = () => {
     activePlayerVisualAid,
     hintsEnabled,
     isMultiplayer,
-    isHost,
+    isLobbyAdmin,
     myPlayerId,
     playersWhoRevealed
   } = useGame();
@@ -62,7 +62,7 @@ export const RevealPage: React.FC = () => {
   // 1. Render Multiplayer Waiting View
   if (isMultiplayer && hasCompletedReveal) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-[calc(100vh-80px)] px-6 py-6 text-center animate-fade-in">
+      <div className="w-full my-auto flex flex-col items-center px-6 py-6 text-center animate-fade-in">
         <div className="ambient-glow-1 top-20 right-10 animate-float" />
         <div className="w-full max-w-md flex flex-col gap-6 z-10">
           <Card className="p-8 border-white/5 bg-brand-card/50">
@@ -73,7 +73,7 @@ export const RevealPage: React.FC = () => {
             <p className="text-xs text-slate-400">
               Keep your word secret! Waiting for other players to finish viewing their cards...
             </p>
-            {isHost && (
+            {isLobbyAdmin && (
               <div className="mt-6 pt-4 border-t border-white/5 text-[10px] text-slate-500 font-extrabold uppercase tracking-widest">
                 Progress: {playersWhoRevealed.length} / {players.length} Ready
               </div>
@@ -87,7 +87,7 @@ export const RevealPage: React.FC = () => {
   // 2. Render Intermediary "Pass Device" screen (Offline Only)
   if (!isMultiplayer && passDeviceMode && nextPlayer) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-[calc(100vh-80px)] px-6 py-6 text-center animate-fade-in">
+      <div className="w-full my-auto flex flex-col items-center px-6 py-6 text-center animate-fade-in">
         <div className="ambient-glow-1 top-20 right-10 animate-float" />
         <div className="w-full max-w-md flex flex-col gap-8 z-10">
           <Card className="p-8 border-brand-primary/10 bg-brand-card/60">
@@ -125,7 +125,7 @@ export const RevealPage: React.FC = () => {
 
   // 2. Render active player screen
   return (
-    <div className="flex flex-col items-center justify-center min-h-[calc(100vh-80px)] px-6 py-6 text-center animate-fade-in">
+    <div className="w-full my-auto flex flex-col items-center px-6 py-6 text-center animate-fade-in">
       <div className="ambient-glow-2 bottom-20 left-10 animate-float-delayed" />
       
       <div className="w-full max-w-md flex flex-col gap-8 z-10">

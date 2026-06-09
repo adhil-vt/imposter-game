@@ -24,7 +24,7 @@ export const AboutPage: React.FC = () => {
   };
 
   return (
-    <div className="flex flex-col items-center justify-center min-h-[calc(100vh-80px)] px-6 py-10 relative overflow-hidden">
+    <div className="w-full my-auto flex flex-col items-center px-6 py-10 relative">
       {/* Floating Decorative Glow Backgrounds */}
       <div className="ambient-glow-1 top-10 left-10 animate-float" />
       <div className="ambient-glow-2 bottom-10 right-10 animate-float-delayed" />

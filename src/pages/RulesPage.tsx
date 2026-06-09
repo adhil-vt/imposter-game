@@ -71,7 +71,7 @@ export const RulesPage: React.FC = () => {
   const activeStep = steps[currentStep];
 
   return (
-    <div className="flex flex-col items-center justify-center min-h-[calc(100vh-80px)] px-6 py-8 relative">
+    <div className="w-full my-auto flex flex-col items-center px-6 py-8 relative">
       <div className="ambient-glow-1 top-20 right-10 animate-float" />
       <div className="ambient-glow-2 bottom-20 left-10 animate-float-delayed" />
 

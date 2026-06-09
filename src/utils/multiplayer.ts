@@ -6,6 +6,7 @@ export interface NetworkPlayer {
   avatar: string;
   isHost?: boolean;
   isAdmin?: boolean;
+  isMuted?: boolean;
 }
 
 export type NetworkMessage =

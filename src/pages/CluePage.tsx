@@ -12,7 +12,7 @@ export const CluePage: React.FC = () => {
     playerOrder,
     setGameState,
     isMultiplayer,
-    isHost,
+    isLobbyAdmin,
     activeClueIndex,
     setActiveClueIndex,
     timerSeconds,
@@ -28,7 +28,7 @@ export const CluePage: React.FC = () => {
     setTimerSeconds(30);
     setTimerActive(false);
     
-    if (isMultiplayer && isHost) {
+    if (isMultiplayer && isLobbyAdmin) {
       multiplayer.send({
         type: 'TIMER_SYNC',
         activeClueIndex: nextIdx,
@@ -45,7 +45,7 @@ export const CluePage: React.FC = () => {
     setTimerSeconds(30);
     setTimerActive(false);
     
-    if (isMultiplayer && isHost) {
+    if (isMultiplayer && isLobbyAdmin) {
       multiplayer.send({
         type: 'TIMER_SYNC',
         activeClueIndex: prevIdx,
@@ -60,7 +60,7 @@ export const CluePage: React.FC = () => {
     const nextActive = !timerActive;
     setTimerActive(nextActive);
     
-    if (isMultiplayer && isHost) {
+    if (isMultiplayer && isLobbyAdmin) {
       multiplayer.send({
         type: 'TIMER_SYNC',
         activeClueIndex,
@@ -75,7 +75,7 @@ export const CluePage: React.FC = () => {
     setTimerActive(false);
     setTimerSeconds(30);
     
-    if (isMultiplayer && isHost) {
+    if (isMultiplayer && isLobbyAdmin) {
       multiplayer.send({
         type: 'TIMER_SYNC',
         activeClueIndex,
@@ -94,7 +94,7 @@ export const CluePage: React.FC = () => {
   const currentSpeaker = players.find(p => p.id === currentSpeakerId);
 
   return (
-    <div className="flex flex-col items-center justify-center min-h-[calc(100vh-80px)] px-6 py-6 relative">
+    <div className="w-full my-auto flex flex-col items-center px-6 py-6 relative">
       <div className="ambient-glow-1 top-10 left-10 animate-float" />
 
       <div className="w-full max-w-md flex flex-col gap-6 z-10">
@@ -138,7 +138,7 @@ export const CluePage: React.FC = () => {
               </div>
 
               {/* Timer Controls */}
-              {(!isMultiplayer || isHost) && (
+              {(!isMultiplayer || isLobbyAdmin) && (
                 <div className="flex gap-2 mt-4">
                   <button
                     onClick={toggleTimer}
@@ -208,7 +208,7 @@ export const CluePage: React.FC = () => {
         </Card>
 
         {/* Footer actions */}
-        {(!isMultiplayer || isHost) && (
+        {(!isMultiplayer || isLobbyAdmin) && (
           <div className="flex gap-4">
             {activeClueIndex > 0 && (
               <Button
