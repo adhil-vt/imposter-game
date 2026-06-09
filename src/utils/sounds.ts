@@ -142,3 +142,10 @@ export const playLose = () => {
   osc.start(now);
   osc.stop(now + 0.7);
 };
+
+/**
+ * Plays a double beep notification for incoming messages.
+ */
+export const playNotification = () => {
+  playTone([600, 800], [0.05, 0.08], 'sine', 0.12, [0, 0.06]);
+};

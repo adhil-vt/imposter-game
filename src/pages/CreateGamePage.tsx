@@ -37,7 +37,8 @@ import {
   MapPin,
   Gamepad2,
   Flame,
-  Copy
+  Copy,
+  UserMinus
 } from 'lucide-react';
 
 export const CreateGamePage: React.FC = () => {
@@ -70,7 +71,8 @@ export const CreateGamePage: React.FC = () => {
     roomCode,
     myPlayerId,
     onlinePlayers,
-    leaveRoom
+    leaveRoom,
+    kickPlayer
   } = useGame();
 
   const [copied, setCopied] = useState(false);
@@ -299,12 +301,12 @@ export const CreateGamePage: React.FC = () => {
 
             {!isGuest && (
               <Button
-                variant="secondary"
+                variant="primary-glass"
                 onClick={() => {
                   playClick();
                   setIsCategoryModalOpen(true);
                 }}
-                className="w-full py-3 rounded-xl font-bold text-sm flex items-center justify-center gap-2 bg-brand-primary/10 border border-brand-primary/20 text-brand-primary hover:bg-brand-primary/25 hover:border-brand-primary/30 transition-all duration-300 shadow-md shadow-brand-primary/5 cursor-pointer"
+                className="w-full py-3 rounded-xl font-bold text-sm flex items-center justify-center gap-2 text-brand-primary hover:text-brand-primary/90 shadow-md shadow-brand-primary/5 cursor-pointer"
               >
                 <Settings className="w-4 h-4" />
                 Choose Categories & Themes
@@ -475,9 +477,23 @@ export const CreateGamePage: React.FC = () => {
                       Host
                     </span>
                   ) : (
-                    <span className="text-[9px] bg-white/5 border border-white/10 text-slate-500 px-2 py-0.5 rounded-full font-bold uppercase">
-                      Player
-                    </span>
+                    <div className="flex items-center gap-2 select-none">
+                      <span className="text-[9px] bg-white/5 border border-white/10 text-slate-500 px-2 py-0.5 rounded-full font-bold uppercase">
+                        Player
+                      </span>
+                      {isHost && player.id !== myPlayerId && (
+                        <button
+                          onClick={() => {
+                            playClick();
+                            kickPlayer(player.id);
+                          }}
+                          className="p-1 rounded-lg bg-brand-danger/10 hover:bg-brand-danger/25 border border-brand-danger/20 hover:border-brand-danger/30 text-brand-danger transition-all cursor-pointer flex items-center justify-center animate-scale-in"
+                          title={`Kick ${player.name}`}
+                        >
+                          <UserMinus className="w-3.5 h-3.5" />
+                        </button>
+                      )}
+                    </div>
                   )}
                 </div>
               ))

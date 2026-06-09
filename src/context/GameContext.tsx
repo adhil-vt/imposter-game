@@ -1,5 +1,5 @@
 /* eslint-disable react-refresh/only-export-components */
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
 import { getRandomWordPair } from '../data/words';
 import type { CategoryKey, WordPair, VisualAid, DifficultyKey } from '../data/words';
 import { 
@@ -9,6 +9,7 @@ import {
   playLose, 
   playTick,
   playBuzzer,
+  playNotification,
   setSoundEffectsEnabled 
 } from '../utils/sounds';
 import { multiplayer, type NetworkPlayer, type NetworkMessage } from '../utils/multiplayer';
@@ -19,6 +20,16 @@ export interface Player {
   avatar: string;
   role: 'CREWMATE' | 'IMPOSTOR';
   word: string;
+}
+
+export interface ChatMessage {
+  id: string;
+  senderId: string;
+  senderName: string;
+  senderAvatar: string;
+  text: string;
+  timestamp: number;
+  isSystem?: boolean;
 }
 
 export type GameState = 'HOME' | 'RULES' | 'ABOUT' | 'SETUP' | 'REVEAL' | 'CLUES' | 'VOTING' | 'RESULTS';
@@ -217,6 +228,12 @@ interface GameContextType {
   hostRoom: () => Promise<string>;
   joinRoom: (code: string, name: string, avatar: string) => Promise<void>;
   leaveRoom: () => void;
+  chatMessages: ChatMessage[];
+  isChatOpen: boolean;
+  setIsChatOpen: (open: boolean) => void;
+  unreadChatCount: number;
+  sendChatMessage: (text: string) => void;
+  kickPlayer: (playerId: string) => void;
 }
 
 const GameContext = createContext<GameContextType | undefined>(undefined);
@@ -421,6 +438,80 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [timerSeconds, setTimerSeconds] = useState<number>(30);
   const [timerActive, setTimerActive] = useState<boolean>(false);
 
+  // Chat states
+  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
+  const [isChatOpen, setIsChatOpen] = useState<boolean>(false);
+  const [unreadChatCount, setUnreadChatCount] = useState<number>(0);
+
+  useEffect(() => {
+    if (isChatOpen) {
+      setUnreadChatCount(0);
+    }
+  }, [isChatOpen]);
+
+  const sendChatMessage = (text: string) => {
+    if (!text.trim()) return;
+    const senderName = isHost 
+      ? (customNames[0] || 'Host') 
+      : (onlinePlayers.find(p => p.id === myPlayerId)?.name || 'Guest');
+    const senderAvatar = isHost 
+      ? (customAvatars[0] || '🦊') 
+      : (onlinePlayers.find(p => p.id === myPlayerId)?.avatar || '🦊');
+      
+    const msg: ChatMessage = {
+      id: `chat_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+      senderId: myPlayerId,
+      senderName,
+      senderAvatar,
+      text: text.trim(),
+      timestamp: Date.now()
+    };
+    
+    setChatMessages(prev => [...prev, msg]);
+    
+    if (isMultiplayer) {
+      multiplayer.send({
+        type: 'CHAT',
+        message: msg
+      });
+    }
+  };
+
+  const kickPlayer = (playerId: string) => {
+    if (isMultiplayer && isHost) {
+      const kickedPlayer = onlinePlayers.find(p => p.id === playerId);
+      if (kickedPlayer) {
+        kickedPlayersRef.current.add(playerId);
+        multiplayer.kickPlayer(playerId);
+        
+        const systemMsg: ChatMessage = {
+          id: `sys_${Date.now()}_${Math.random()}`,
+          senderId: 'system',
+          senderName: 'System',
+          senderAvatar: '🤖',
+          text: `${kickedPlayer.name} was kicked from the room.`,
+          timestamp: Date.now(),
+          isSystem: true
+        };
+        setChatMessages(prev => [...prev, systemMsg]);
+        
+        multiplayer.send({
+          type: 'CHAT',
+          message: systemMsg
+        });
+      }
+    }
+  };
+
+  const isChatOpenRef = useRef(isChatOpen);
+  const myPlayerIdRef = useRef(myPlayerId);
+  const onlinePlayersRef = useRef(onlinePlayers);
+  const kickedPlayersRef = useRef<Set<string>>(new Set());
+
+  useEffect(() => { isChatOpenRef.current = isChatOpen; }, [isChatOpen]);
+  useEffect(() => { myPlayerIdRef.current = myPlayerId; }, [myPlayerId]);
+  useEffect(() => { onlinePlayersRef.current = onlinePlayers; }, [onlinePlayers]);
+
   // Play tick sound whenever timerSeconds ticks down in active state
   useEffect(() => {
     if (timerActive && timerSeconds > 0 && timerSeconds < 30) {
@@ -507,7 +598,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
         if (isHost) {
           setPlayersWhoRevealed(prev => {
             const next = prev.includes(msg.playerId) ? prev : [...prev, msg.playerId];
-            if (next.length === onlinePlayers.length) {
+            if (next.length === onlinePlayersRef.current.length) {
               setGameState('CLUES');
               setTimerSeconds(30);
               setTimerActive(false);
@@ -534,7 +625,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
         if (isHost) {
           setVotes(prev => {
             const next = { ...prev, [msg.voterId]: msg.votedId };
-            if (Object.keys(next).length === onlinePlayers.length) {
+            if (Object.keys(next).length === onlinePlayersRef.current.length) {
               tallyMultiplayerResults(next);
             }
             return next;
@@ -565,6 +656,34 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
       case 'STATE_CHANGE':
         setGameState(msg.state as GameState);
         break;
+
+      case 'KICKED':
+        leaveRoom();
+        showConfirm({
+          title: 'Kicked from Room',
+          message: 'You have been kicked from the room by the host.',
+          confirmText: 'OK',
+          onConfirm: () => {}
+        });
+        break;
+
+      case 'CHAT':
+        setChatMessages(prev => {
+          if (prev.some(m => m.id === msg.message.id)) return prev;
+          
+          if (!isChatOpenRef.current && msg.message.senderId !== myPlayerIdRef.current) {
+            setUnreadChatCount(c => c + 1);
+            playNotification();
+          } else if (msg.message.senderId !== myPlayerIdRef.current) {
+            playNotification();
+          }
+          
+          return [...prev, msg.message];
+        });
+        if (isHost) {
+          multiplayer.send(msg);
+        }
+        break;
     }
   };
 
@@ -577,16 +696,54 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
       });
       return next;
     });
+
+    const systemMsg: ChatMessage = {
+      id: `sys_${Date.now()}_${Math.random()}`,
+      senderId: 'system',
+      senderName: 'System',
+      senderAvatar: '🤖',
+      text: `${player.name} joined the room.`,
+      timestamp: Date.now(),
+      isSystem: true
+    };
+    setChatMessages(prev => [...prev, systemMsg]);
+    multiplayer.send({
+      type: 'CHAT',
+      message: systemMsg
+    });
   };
 
   const handlePlayerDisconnected = (playerId: string) => {
+    if (kickedPlayersRef.current.has(playerId)) {
+      kickedPlayersRef.current.delete(playerId);
+      return;
+    }
+
+    let disconnectedName = 'Someone';
     setOnlinePlayers(prev => {
-      const next = prev.filter(p => p.id !== playerId);
+      const p = prev.find(player => player.id === playerId);
+      if (p) disconnectedName = p.name;
+      const next = prev.filter(player => player.id !== playerId);
       multiplayer.send({
         type: 'LOBBY_UPDATE',
         players: next
       });
       return next;
+    });
+
+    const systemMsg: ChatMessage = {
+      id: `sys_${Date.now()}_${Math.random()}`,
+      senderId: 'system',
+      senderName: 'System',
+      senderAvatar: '🤖',
+      text: `${disconnectedName} left the room.`,
+      timestamp: Date.now(),
+      isSystem: true
+    };
+    setChatMessages(prev => [...prev, systemMsg]);
+    multiplayer.send({
+      type: 'CHAT',
+      message: systemMsg
     });
   };
 
@@ -656,6 +813,9 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setPlayersWhoRevealed([]);
     setMultiplayerStatus('idle');
     setGameState('HOME');
+    setChatMessages([]);
+    setIsChatOpen(false);
+    setUnreadChatCount(0);
   };
 
   const tallyMultiplayerResults = (finalVotes: Record<string, string>) => {
@@ -1082,6 +1242,9 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setWinner(null);
     setVoteStats({});
     setGameState('HOME');
+    setChatMessages([]);
+    setIsChatOpen(false);
+    setUnreadChatCount(0);
   };
 
   const clearStats = () => {
@@ -1173,6 +1336,12 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
         hostRoom,
         joinRoom,
         leaveRoom,
+        chatMessages,
+        isChatOpen,
+        setIsChatOpen,
+        unreadChatCount,
+        sendChatMessage,
+        kickPlayer,
       }}
     >
       {children}

@@ -1,7 +1,7 @@
 import React from 'react';
 
 interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
-  variant?: 'primary' | 'secondary' | 'glass' | 'danger' | 'success';
+  variant?: 'primary' | 'secondary' | 'glass' | 'danger' | 'success' | 'primary-glass' | 'secondary-glass';
   size?: 'sm' | 'md' | 'lg';
   fullWidth?: boolean;
   animateHover?: boolean;
@@ -24,6 +24,8 @@ export const Button: React.FC<ButtonProps> = ({
     glass: 'bg-white/5 border border-white/10 text-slate-200 hover:bg-white/10 hover:text-white backdrop-blur-md',
     success: 'bg-gradient-to-r from-emerald-500 to-brand-accent text-white shadow-lg shadow-brand-accent/25 hover:shadow-brand-accent/40 border border-white/10',
     danger: 'bg-gradient-to-r from-red-500 to-brand-danger text-white shadow-lg shadow-brand-danger/25 hover:shadow-brand-danger/40 border border-white/10',
+    'primary-glass': 'bg-brand-primary/10 border border-brand-primary/20 text-slate-200 hover:bg-brand-primary/20 hover:border-brand-primary/40 hover:text-white backdrop-blur-md',
+    'secondary-glass': 'bg-brand-secondary/10 border border-brand-secondary/20 text-slate-200 hover:bg-brand-secondary/20 hover:border-brand-secondary/40 hover:text-white backdrop-blur-md',
   };
 
   const sizes = {

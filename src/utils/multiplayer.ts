@@ -16,7 +16,9 @@ export type NetworkMessage =
   | { type: 'VOTE_CAST'; voterId: string; votedId: string }
   | { type: 'GAME_OVER'; winner: 'CREWMATES' | 'IMPOSTOR'; voteStats: Record<string, number>; votes: Record<string, string> }
   | { type: 'PLAY_AGAIN' }
-  | { type: 'STATE_CHANGE'; state: string };
+  | { type: 'STATE_CHANGE'; state: string }
+  | { type: 'KICKED' }
+  | { type: 'CHAT'; message: any };
 
 class MultiplayerService {
   private peer: Peer | null = null;
@@ -172,6 +174,19 @@ class MultiplayerService {
       const conn = this.connections[playerId];
       if (conn && conn.open) {
         conn.send(msg);
+      }
+    }
+  }
+
+  public kickPlayer(playerId: string) {
+    if (this.isHost) {
+      const conn = this.connections[playerId];
+      if (conn) {
+        if (conn.open) {
+          conn.send({ type: 'KICKED' });
+        }
+        conn.close();
+        delete this.connections[playerId];
       }
     }
   }

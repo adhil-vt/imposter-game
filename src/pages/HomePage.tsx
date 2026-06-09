@@ -178,23 +178,23 @@ export const HomePage: React.FC = () => {
 
           <div className="grid grid-cols-2 gap-3">
             <Button 
-              variant="secondary" 
+              variant="primary-glass" 
               size="md" 
               onClick={handleHostClick}
               disabled={multiplayerStatus === 'connecting'}
-              className="py-3 rounded-2xl text-xs font-black bg-brand-primary/15 border border-brand-primary/30 text-slate-200"
+              className="py-3 rounded-2xl text-xs font-black"
             >
               <Users className="w-4 h-4 mr-1.5 text-brand-primary" />
               Host Online
             </Button>
             <Button 
-              variant="secondary" 
+              variant="secondary-glass" 
               size="md" 
               onClick={() => {
                 playClick();
                 setIsJoinModalOpen(true);
               }}
-              className="py-3 rounded-2xl text-xs font-black bg-brand-secondary/15 border border-brand-secondary/30 text-slate-200"
+              className="py-3 rounded-2xl text-xs font-black"
             >
               <UserPlus className="w-4 h-4 mr-1.5 text-brand-secondary" />
               Join Room
