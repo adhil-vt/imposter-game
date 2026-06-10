@@ -1188,18 +1188,23 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
       return next;
     });
 
-    let disconnectedName = '';
-    let nextOnlinePlayers: NetworkPlayer[] = [];
-    setOnlinePlayers(prev => {
-      const p = prev.find(player => player.id === playerId);
-      if (p) disconnectedName = p.name;
-      const next = prev.filter(player => player.id !== playerId);
-      nextOnlinePlayers = next;
-      multiplayer.send({
-        type: 'LOBBY_UPDATE',
-        players: next
-      });
-      return next;
+    // Compute the leaving player and next list synchronously from the ref so
+    // disconnectedName is available for the notice below. Reading it from inside
+    // the setOnlinePlayers updater left it stale (the updater runs on a later
+    // render), which made the early-return below fire and silently dropped the
+    // "<player> left the lobby" notice.
+    const prevOnlinePlayers = onlinePlayersRef.current;
+    const leavingPlayerEntry = prevOnlinePlayers.find(player => player.id === playerId);
+    const disconnectedName = leavingPlayerEntry ? leavingPlayerEntry.name : '';
+    const nextOnlinePlayers = prevOnlinePlayers.filter(player => player.id !== playerId);
+    // Update the ref synchronously so a duplicate call for the same player (e.g.
+    // the LEAVE message followed by the peer 'close' event) early-returns below
+    // instead of firing the notice twice.
+    onlinePlayersRef.current = nextOnlinePlayers;
+    setOnlinePlayers(nextOnlinePlayers);
+    multiplayer.send({
+      type: 'LOBBY_UPDATE',
+      players: nextOnlinePlayers
     });
 
     if (!disconnectedName) return;
