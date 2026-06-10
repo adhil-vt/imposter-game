@@ -750,6 +750,10 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const myPlayerIdRef = useRef(myPlayerId);
   const onlinePlayersRef = useRef(onlinePlayers);
   const kickedPlayersRef = useRef<Set<string>>(new Set());
+  // True when the local player tears down the session on purpose (leaving/closing/
+  // already handling a host-lost event). Prevents the "Disconnected" modal from
+  // firing for our own intentional disconnects.
+  const intentionalLeaveRef = useRef(false);
 
   useEffect(() => { isChatOpenRef.current = isChatOpen; }, [isChatOpen]);
   useEffect(() => { myPlayerIdRef.current = myPlayerId; }, [myPlayerId]);
@@ -1064,6 +1068,10 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
       case 'ROOM_NOTICE':
         pushRoomNotice(msg.text);
         break;
+
+      case 'ROOM_CLOSED':
+        handleHostConnectionLost();
+        break;
     }
   };
 
@@ -1208,8 +1216,42 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
     });
   };
 
+  // Reset all multiplayer-related state back to a clean single-device baseline.
+  const resetMultiplayerState = () => {
+    setIsMultiplayer(false);
+    setIsHost(false);
+    setRoomCode('');
+    setMyPlayerId('');
+    setOnlinePlayers([]);
+    setPlayersWhoRevealed([]);
+    setChatMessages([]);
+    setIsChatOpen(false);
+    setUnreadChatCount(0);
+  };
+
+  // Guest-side: the host left, closed the room, or the connection dropped.
+  // Tear down locally, return to home, and surface the Disconnected modal.
+  const handleHostConnectionLost = () => {
+    if (intentionalLeaveRef.current || multiplayer.isHost) return;
+    intentionalLeaveRef.current = true;
+
+    multiplayer.disconnect();
+    resetMultiplayerState();
+    setMultiplayerStatus('disconnected');
+    setGameState('HOME');
+
+    showConfirm({
+      title: 'Disconnected',
+      message: 'Connection to the host was lost or the host closed the room.',
+      confirmText: 'OK',
+      cancelText: 'Cancel',
+      onConfirm: () => {},
+    });
+  };
+
   const hostRoom = async (): Promise<string> => {
     setMultiplayerStatus('connecting');
+    intentionalLeaveRef.current = false;
     try {
       const code = await multiplayer.initHost(
         handleIncomingMessage,
@@ -1244,6 +1286,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const joinRoom = async (code: string, name: string, avatar: string): Promise<void> => {
     setMultiplayerStatus('connecting');
+    intentionalLeaveRef.current = false;
     try {
       await multiplayer.initGuest(
         code,
@@ -1252,7 +1295,9 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
         handleIncomingMessage,
         (status) => {
           if (status === 'connected') setMultiplayerStatus('connected');
-          if (status === 'disconnected') setMultiplayerStatus('disconnected');
+          // The host left, closed the room, or the link dropped. This fires when
+          // the host's peer is destroyed (refresh, tab close, or an in-app leave).
+          if (status === 'disconnected') handleHostConnectionLost();
           if (status === 'error') setMultiplayerStatus('error');
         }
       );
@@ -1267,19 +1312,18 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
+  // Local player leaves on purpose. Hosts broadcast ROOM_CLOSED before tearing
+  // down so guests are notified immediately; guests just disconnect.
   const leaveRoom = () => {
-    multiplayer.disconnect();
-    setIsMultiplayer(false);
-    setIsHost(false);
-    setRoomCode('');
-    setMyPlayerId('');
-    setOnlinePlayers([]);
-    setPlayersWhoRevealed([]);
+    intentionalLeaveRef.current = true;
+    if (multiplayer.isHost) {
+      multiplayer.closeRoom();
+    } else {
+      multiplayer.disconnect();
+    }
+    resetMultiplayerState();
     setMultiplayerStatus('idle');
     setGameState('HOME');
-    setChatMessages([]);
-    setIsChatOpen(false);
-    setUnreadChatCount(0);
   };
 
   const tallyMultiplayerResults = (finalVotes: Record<string, string>) => {
@@ -1698,6 +1742,19 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const resetGame = () => {
     playClick();
+    // If we're in a multiplayer session, leaving to Home must also tear down the
+    // peer connection so other players are notified (host broadcasts ROOM_CLOSED).
+    // Without this, a host returning Home left guests stuck with a live but dead room.
+    if (isMultiplayer) {
+      intentionalLeaveRef.current = true;
+      if (multiplayer.isHost) {
+        multiplayer.closeRoom();
+      } else {
+        multiplayer.disconnect();
+      }
+      resetMultiplayerState();
+      setMultiplayerStatus('idle');
+    }
     setPlayers([]);
     setPlayerOrder([]);
     setImpostorId('');

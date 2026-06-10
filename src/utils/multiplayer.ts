@@ -23,6 +23,7 @@ export type NetworkMessage =
   | { type: 'KICKED' }
   | { type: 'CHAT'; message: any }
   | { type: 'ROOM_NOTICE'; text: string }
+  | { type: 'ROOM_CLOSED' }
   | { type: 'SETTINGS_UPDATE'; difficulty: any; selectedCategories: any[]; impostorKnowsRole: boolean; randomizeOrder: boolean; hintsEnabled: boolean }
   | { type: 'TRANSFER_HOST'; newAdminId: string }
   | { type: 'KICK_REQUEST'; targetId: string }
@@ -225,6 +226,27 @@ class MultiplayerService {
       this.bannedIds.add(playerId);
       this.kickPlayer(playerId);
     }
+  }
+
+  // Host only: tell every connected guest the room is closing, then tear down.
+  // Guests detect this both via the explicit ROOM_CLOSED message (fast path) and
+  // via the connection 'close' event fired when the peer is destroyed (fallback).
+  public closeRoom() {
+    if (!this.isHost) {
+      this.disconnect();
+      return;
+    }
+    Object.values(this.connections).forEach((conn) => {
+      if (conn.open) {
+        try {
+          conn.send({ type: 'ROOM_CLOSED' });
+        } catch {
+          // ignore send failures on a closing connection
+        }
+      }
+    });
+    // Give the ROOM_CLOSED messages a moment to flush before destroying the peer.
+    setTimeout(() => this.disconnect(), 200);
   }
 
   public disconnect() {
