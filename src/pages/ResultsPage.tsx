@@ -238,7 +238,7 @@ export const ResultsPage: React.FC = () => {
           <div className="flex gap-4 w-full">
             <Button 
               variant="glass" 
-              onClick={isMultiplayer ? leaveRoom : resetGame} 
+              onClick={isMultiplayer ? () => leaveRoom() : resetGame} 
               className="flex-1 py-4 rounded-2xl font-bold text-sm"
             >
               {isMultiplayer ? <LogOut className="w-5 h-5 mr-2" /> : <PlusCircle className="w-5 h-5 mr-2" />}

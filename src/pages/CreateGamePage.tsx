@@ -896,7 +896,7 @@ export const CreateGamePage: React.FC = () => {
               <>
                 <Button 
                   variant="glass" 
-                  onClick={leaveRoom} 
+                  onClick={() => leaveRoom()} 
                   className="flex-1 py-4 rounded-2xl border-white/10 hover:bg-brand-danger/10 hover:text-brand-danger hover:border-brand-danger/25 font-bold transition-all"
                 >
                   {isHost ? 'Close Lobby' : 'Leave Lobby'}

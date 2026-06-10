@@ -766,6 +766,11 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const onlinePlayersRef = useRef(onlinePlayers);
   const kickedPlayersRef = useRef<Set<string>>(new Set());
   const receivedHostLeftRef = useRef(false);
+  // Set whenever THIS client deliberately leaves/closes the room. Used to
+  // suppress the "Disconnected" modal on the player's own intentional leave
+  // (the modal should only appear when the connection is genuinely lost or the
+  // host ends the room). Reset on every fresh host/join.
+  const intentionalLeaveRef = useRef(false);
 
   useEffect(() => { isChatOpenRef.current = isChatOpen; }, [isChatOpen]);
   useEffect(() => { myPlayerIdRef.current = myPlayerId; }, [myPlayerId]);
@@ -1313,6 +1318,8 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const hostRoom = async (): Promise<string> => {
     setMultiplayerStatus('connecting');
+    receivedHostLeftRef.current = false;
+    intentionalLeaveRef.current = false;
     try {
       const code = await multiplayer.initHost(
         (senderId, msg) => handleIncomingMessageRef.current(senderId, msg),
@@ -1348,6 +1355,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const joinRoom = async (code: string, name: string, avatar: string): Promise<void> => {
     setMultiplayerStatus('connecting');
     receivedHostLeftRef.current = false;
+    intentionalLeaveRef.current = false;
     try {
       await multiplayer.initGuest(
         code,
@@ -1358,8 +1366,10 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
           if (status === 'connected') setMultiplayerStatus('connected');
           if (status === 'disconnected') {
             setMultiplayerStatus('disconnected');
-            leaveRoomRef.current();
-            if (!receivedHostLeftRef.current) {
+            // Only surface the modal for a genuine connection loss / host
+            // closing the room. A deliberate self-leave (intentionalLeaveRef)
+            // or a received HOST_LEFT shows its own message, so skip here.
+            if (!receivedHostLeftRef.current && !intentionalLeaveRef.current) {
               showConfirmRef.current({
                 title: 'Disconnected',
                 message: 'Connection to the host was lost or the host closed the room.',
@@ -1367,6 +1377,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 onConfirm: () => {}
               });
             }
+            leaveRoomRef.current();
           }
           if (status === 'error') setMultiplayerStatus('error');
         }
@@ -1383,6 +1394,9 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const leaveRoom = (isHostDisconnect = false) => {
+    // This client is leaving on purpose, so its own peer teardown must not
+    // trigger the "Disconnected" modal.
+    intentionalLeaveRef.current = true;
     const wasMultiplayer = multiplayer.roomCode !== '';
     const wasHost = multiplayer.isHost;
 
