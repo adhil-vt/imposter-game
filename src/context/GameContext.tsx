@@ -1887,6 +1887,15 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const resetGame = () => {
     playClick();
+    // Returning Home (e.g. header Home button) while in a multiplayer room must
+    // tear down the peer connection so the other players are notified. Without
+    // this, the host's peer stayed alive and guests never learned the host left
+    // (the modal only appeared on a refresh, which destroys the peer on unload).
+    // Host: destroy the peer immediately so guests get the "Disconnected" modal,
+    // exactly like a refresh. Guest: notify the host it left.
+    if (multiplayer.roomCode !== '') {
+      leaveRoom(multiplayer.isHost);
+    }
     setPlayers([]);
     setPlayerOrder([]);
     setImpostorId('');
