@@ -211,6 +211,21 @@ class MultiplayerService {
     }
   }
 
+  // Broadcast to all connected peers except one (Host only). Used to notify
+  // everyone of an event without echoing it back to the peer that caused it
+  // (e.g. a "<name> joined the lobby" banner should not show to the joiner).
+  public broadcastExcept(excludePeerId: string, msg: NetworkMessage) {
+    if (!this.isHost) return;
+    Object.entries(this.connections).forEach(([peerId, conn]) => {
+      if (peerId === excludePeerId) return;
+      if (conn.open) {
+        conn.send(msg);
+      } else if (msg.type === 'CHAT') {
+        this.queuePendingMessage(peerId, msg);
+      }
+    });
+  }
+
   public kickPlayer(playerId: string) {
     if (this.isHost) {
       const conn = this.connections[playerId];
