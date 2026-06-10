@@ -1169,6 +1169,15 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
       type: 'CHAT',
       message: systemMsg
     });
+    // Show the join banner to the host and every other player, but not to the
+    // joiner themselves (they already see the lobby they just entered). Mirrors
+    // the "<name> left the lobby" notice.
+    const joinNotice = `${cleanedName} joined the lobby.`;
+    pushRoomNotice(joinNotice);
+    multiplayer.broadcastExcept(cleanedPlayer.id, {
+      type: 'ROOM_NOTICE',
+      text: joinNotice
+    });
   };
 
   const handlePlayerDisconnected = (playerId: string) => {
