@@ -3,7 +3,7 @@ import { useGame } from '../context/GameContext';
 import { Button } from '../components/Button';
 import { Card } from '../components/Card';
 import confetti from 'canvas-confetti';
-import { Award, RefreshCw, PlusCircle, Trophy, ShieldAlert } from 'lucide-react';
+import { Award, RefreshCw, PlusCircle, Trophy, ShieldAlert, LogOut, Check } from 'lucide-react';
 
 export const ResultsPage: React.FC = () => {
   const {
@@ -20,6 +20,9 @@ export const ResultsPage: React.FC = () => {
     isMultiplayer,
     isLobbyAdmin,
     leaveRoom,
+    readyPlayers,
+    setPlayerReady,
+    myPlayerId,
   } = useGame();
 
   const impostorPlayer = players.find(p => p.id === impostorId);
@@ -213,9 +216,22 @@ export const ResultsPage: React.FC = () => {
         {/* Controls */}
         <div className="flex flex-col gap-3 w-full">
           {isMultiplayer && !isLobbyAdmin && (
-            <div className="text-center py-3 px-4 rounded-2xl bg-white/5 border border-white/5 text-slate-400 font-bold text-sm flex items-center justify-center gap-2 animate-pulse mb-2">
-              <RefreshCw className="w-4 h-4 animate-spin text-brand-primary" />
-              Waiting for Host to start next round...
+            <div className="flex flex-col gap-2 mb-2 w-full">
+              {readyPlayers.includes(myPlayerId) ? (
+                <div className="text-center py-3.5 px-4 rounded-2xl bg-brand-accent/10 border border-brand-accent/20 text-brand-accent font-bold text-sm flex items-center justify-center gap-2 animate-pulse">
+                  <Check className="w-4 h-4 text-brand-accent" />
+                  Ready! Waiting for Host... ({readyPlayers.length}/{players.length} Ready)
+                </div>
+              ) : (
+                <Button
+                  variant="primary"
+                  onClick={() => setPlayerReady(true)}
+                  className="w-full py-4 rounded-2xl font-bold text-sm flex items-center justify-center gap-2"
+                >
+                  <Check className="w-5 h-5" />
+                  I'm Ready for Next Round
+                </Button>
+              )}
             </div>
           )}
 
@@ -225,7 +241,7 @@ export const ResultsPage: React.FC = () => {
               onClick={isMultiplayer ? leaveRoom : resetGame} 
               className="flex-1 py-4 rounded-2xl font-bold text-sm"
             >
-              <PlusCircle className="w-5 h-5 mr-2" />
+              {isMultiplayer ? <LogOut className="w-5 h-5 mr-2" /> : <PlusCircle className="w-5 h-5 mr-2" />}
               {isMultiplayer ? 'Leave Room' : 'New Game'}
             </Button>
 
@@ -236,7 +252,7 @@ export const ResultsPage: React.FC = () => {
                 className="flex-[2] py-4 rounded-2xl font-bold text-sm"
               >
                 <RefreshCw className="w-5 h-5 mr-2" />
-                Play Again
+                {isMultiplayer ? `Play Again (${readyPlayers.length}/${players.length} Ready)` : 'Play Again'}
               </Button>
             )}
           </div>

@@ -11,6 +11,7 @@ import { VotingPage } from './pages/VotingPage';
 import { ResultsPage } from './pages/ResultsPage';
 import { RulesPage } from './pages/RulesPage';
 import { AboutPage } from './pages/AboutPage';
+import { ChangelogPage } from './pages/ChangelogPage';
 
 function GameContent() {
   const { gameState, roomNotice } = useGame();
@@ -33,6 +34,8 @@ function GameContent() {
         return <VotingPage />;
       case 'RESULTS':
         return <ResultsPage />;
+      case 'CHANGELOG':
+        return <ChangelogPage />;
       default:
         return <HomePage />;
     }

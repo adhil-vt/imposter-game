@@ -13,6 +13,7 @@ import {
   setSoundEffectsEnabled 
 } from '../utils/sounds';
 import { multiplayer, type NetworkPlayer, type NetworkMessage } from '../utils/multiplayer';
+import { containsProfanity, cleanText } from '../utils/profanityFilter';
 
 export interface Player {
   id: string;
@@ -32,7 +33,7 @@ export interface ChatMessage {
   isSystem?: boolean;
 }
 
-export type GameState = 'HOME' | 'RULES' | 'ABOUT' | 'SETUP' | 'REVEAL' | 'CLUES' | 'VOTING' | 'RESULTS';
+export type GameState = 'HOME' | 'RULES' | 'ABOUT' | 'SETUP' | 'REVEAL' | 'CLUES' | 'VOTING' | 'RESULTS' | 'CHANGELOG';
 
 export interface GameStats {
   gamesPlayed: number;
@@ -219,6 +220,8 @@ interface GameContextType {
   multiplayerStatus: 'idle' | 'connecting' | 'connected' | 'disconnected' | 'error';
   onlinePlayers: NetworkPlayer[];
   playersWhoRevealed: string[];
+  readyPlayers: string[];
+  setPlayerReady: (ready: boolean) => void;
   activeClueIndex: number;
   setActiveClueIndex: (idx: number) => void;
   timerSeconds: number;
@@ -446,6 +449,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [multiplayerStatus, setMultiplayerStatus] = useState<GameContextType['multiplayerStatus']>('idle');
   const [onlinePlayers, setOnlinePlayers] = useState<NetworkPlayer[]>([]);
   const [playersWhoRevealed, setPlayersWhoRevealed] = useState<string[]>([]);
+  const [readyPlayers, setReadyPlayers] = useState<string[]>([]);
   const [activeClueIndex, setActiveClueIndex] = useState<number>(0);
   const [timerSeconds, setTimerSeconds] = useState<number>(30);
   const [timerActive, setTimerActive] = useState<boolean>(false);
@@ -556,6 +560,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const sendChatMessage = (text: string) => {
     if (!text.trim()) return;
+    const cleanedText = cleanText(text.trim());
     const senderName = isHost 
       ? (customNames[0] || 'Host') 
       : (onlinePlayers.find(p => p.id === myPlayerId)?.name || 'Guest');
@@ -568,7 +573,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
       senderId: myPlayerId,
       senderName,
       senderAvatar,
-      text: text.trim(),
+      text: cleanedText,
       timestamp: Date.now()
     };
     
@@ -696,13 +701,19 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const updatePlayerName = (newName: string) => {
     if (!newName.trim()) return;
     const trimmed = newName.trim();
+    if (containsProfanity(trimmed)) {
+      pushRoomNotice('Name contains vulgar or inappropriate language!');
+      return;
+    }
     if (isMultiplayer) {
       if (isHost) {
-        const oldPlayer = onlinePlayers.find(p => p.id === myPlayerId);
+        const oldPlayer = onlinePlayersRef.current.find(p => p.id === myPlayerIdRef.current);
         const oldName = oldPlayer?.name || 'Host';
         
+        if (oldName === trimmed) return;
+        
         setOnlinePlayers(prev => {
-          const next = prev.map(p => p.id === myPlayerId ? { ...p, name: trimmed } : p);
+          const next = prev.map(p => p.id === myPlayerIdRef.current ? { ...p, name: trimmed } : p);
           multiplayer.send({
             type: 'LOBBY_UPDATE',
             players: next
@@ -731,6 +742,10 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
           message: systemMsg
         });
       } else {
+        const oldPlayer = onlinePlayersRef.current.find(p => p.id === myPlayerIdRef.current);
+        const oldName = oldPlayer?.name || '';
+        if (oldName === trimmed) return;
+
         multiplayer.send({
           type: 'RENAME_PLAYER',
           playerId: myPlayerId,
@@ -750,6 +765,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const myPlayerIdRef = useRef(myPlayerId);
   const onlinePlayersRef = useRef(onlinePlayers);
   const kickedPlayersRef = useRef<Set<string>>(new Set());
+  const receivedHostLeftRef = useRef(false);
 
   useEffect(() => { isChatOpenRef.current = isChatOpen; }, [isChatOpen]);
   useEffect(() => { myPlayerIdRef.current = myPlayerId; }, [myPlayerId]);
@@ -816,10 +832,12 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
         if (isHost) {
           const oldPlayer = onlinePlayersRef.current.find(p => p.id === msg.playerId);
           const oldName = oldPlayer?.name || 'Someone';
-          const trimmedNewName = msg.name.trim();
+          const sanitizedNewName = cleanText(msg.name.trim());
+
+          if (oldName === sanitizedNewName) break;
 
           setOnlinePlayers(prev => {
-            const next = prev.map(p => p.id === msg.playerId ? { ...p, name: trimmedNewName } : p);
+            const next = prev.map(p => p.id === msg.playerId ? { ...p, name: sanitizedNewName } : p);
             multiplayer.send({
               type: 'LOBBY_UPDATE',
               players: next
@@ -832,7 +850,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
             senderId: 'system',
             senderName: 'System',
             senderAvatar: '✏️',
-            text: `${oldName} changed their name to ${trimmedNewName}.`,
+            text: `${oldName} changed their name to ${sanitizedNewName}.`,
             timestamp: Date.now(),
             isSystem: true
           };
@@ -897,7 +915,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
         if (isHost) {
           const sender = onlinePlayersRef.current.find(p => p.id === _senderId);
-          if (_senderId === myPlayerId || sender?.isAdmin) {
+          if (_senderId === myPlayerIdRef.current || sender?.isAdmin) {
             processTransferHost(msg.newAdminId);
             multiplayer.send(msg);
           }
@@ -1003,11 +1021,12 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
           });
         }
         break;
-
       case 'GAME_OVER':
         setWinner(msg.winner);
         setVoteStats(msg.voteStats);
         setVotes(msg.votes);
+        setImpostorId(msg.impostorId);
+        setReadyPlayers([lobbyAdminId]);
         setGameState('RESULTS');
         if (msg.winner === 'CREWMATES') {
           playWin();
@@ -1021,6 +1040,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setPlayersWhoRevealed([]);
         setWinner(null);
         setVoteStats({});
+        setReadyPlayers([]);
         setGameState('SETUP');
         break;
 
@@ -1043,33 +1063,86 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       case 'CHAT':
         let appended = false;
+        const cleanedMsgText = cleanText(msg.message.text);
+        const processedMsg = {
+          ...msg.message,
+          text: cleanedMsgText
+        };
         setChatMessages(prev => {
-          if (prev.some(m => m.id === msg.message.id)) return prev;
+          if (prev.some(m => m.id === processedMsg.id)) return prev;
 
           appended = true;
-          if (!isChatOpenRef.current && msg.message.senderId !== myPlayerIdRef.current) {
+          if (!isChatOpenRef.current && processedMsg.senderId !== myPlayerIdRef.current) {
             setUnreadChatCount(c => c + 1);
             playNotification();
-          } else if (msg.message.senderId !== myPlayerIdRef.current) {
+          } else if (processedMsg.senderId !== myPlayerIdRef.current) {
             playNotification();
           }
 
-          return [...prev, msg.message];
+          return [...prev, processedMsg];
         });
         if (isHost && appended) {
-          multiplayer.send(msg);
+          multiplayer.send({
+            ...msg,
+            message: processedMsg
+          });
         }
         break;
 
       case 'ROOM_NOTICE':
         pushRoomNotice(msg.text);
         break;
+
+      case 'PLAYER_READY':
+        if (isHost) {
+          setReadyPlayers(prev => {
+            const next = msg.isReady
+              ? (prev.includes(msg.playerId) ? prev : [...prev, msg.playerId])
+              : prev.filter(id => id !== msg.playerId);
+            multiplayer.send({
+              type: 'READY_STATUS_UPDATE',
+              readyPlayers: next
+            });
+            return next;
+          });
+        }
+        break;
+
+      case 'READY_STATUS_UPDATE':
+        setReadyPlayers(msg.readyPlayers);
+        break;
+
+      case 'LEAVE':
+        if (multiplayer.isHost) {
+          const senderPeerId = _senderId || msg.playerId;
+          if (senderPeerId) {
+            multiplayer.closeConnection(senderPeerId);
+            handlePlayerDisconnected(senderPeerId);
+          }
+        }
+        break;
+
+      case 'HOST_LEFT':
+        receivedHostLeftRef.current = true;
+        leaveRoom(true);
+        showConfirm({
+          title: 'Lobby Ended',
+          message: 'The host has left the lobby. The game session has ended.',
+          confirmText: 'OK',
+          onConfirm: () => {}
+        });
+        break;
     }
   };
 
   const handlePlayerJoined = (player: NetworkPlayer) => {
+    const cleanedName = cleanText(player.name);
+    const cleanedPlayer = {
+      ...player,
+      name: cleanedName
+    };
     setOnlinePlayers(prev => {
-      const next = prev.some(p => p.id === player.id) ? prev : [...prev, player];
+      const next = prev.some(p => p.id === cleanedPlayer.id) ? prev : [...prev, cleanedPlayer];
       multiplayer.send({
         type: 'LOBBY_UPDATE',
         players: next
@@ -1082,7 +1155,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
       senderId: 'system',
       senderName: 'System',
       senderAvatar: '🤖',
-      text: `${player.name} joined the room.`,
+      text: `${cleanedName} joined the room.`,
       timestamp: Date.now(),
       isSystem: true
     };
@@ -1099,7 +1172,18 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
       kickedPlayersRef.current.delete(playerId);
     }
 
-    let disconnectedName = 'Someone';
+    setReadyPlayers(prev => {
+      const next = prev.filter(id => id !== playerId);
+      if (isHost) {
+        multiplayer.send({
+          type: 'READY_STATUS_UPDATE',
+          readyPlayers: next
+        });
+      }
+      return next;
+    });
+
+    let disconnectedName = '';
     let nextOnlinePlayers: NetworkPlayer[] = [];
     setOnlinePlayers(prev => {
       const p = prev.find(player => player.id === playerId);
@@ -1112,6 +1196,8 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
       });
       return next;
     });
+
+    if (!disconnectedName) return;
 
     if (wasKicked) return;
 
@@ -1126,19 +1212,19 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
       senderId: 'system',
       senderName: 'System',
       senderAvatar: '🤖',
-      text: `${disconnectedName} left the room.`,
+      text: `${disconnectedName} left the lobby.`,
       timestamp: Date.now(),
       isSystem: true
     };
     setChatMessages(prev => [...prev, systemMsg]);
-    pushRoomNotice(`${disconnectedName} left the room.`);
+    pushRoomNotice(`${disconnectedName} left the lobby.`);
     multiplayer.send({
       type: 'CHAT',
       message: systemMsg
     });
     multiplayer.send({
       type: 'ROOM_NOTICE',
-      text: `${disconnectedName} left the room.`
+      text: `${disconnectedName} left the lobby.`
     });
 
     if (!isActiveGame) return;
@@ -1184,11 +1270,13 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setHistory(prev => [newHistoryItem, ...prev].slice(0, 10));
 
       setGameState('RESULTS');
+      setReadyPlayers([myPlayerId]);
       multiplayer.send({
         type: 'GAME_OVER',
         winner: 'CREWMATES',
         voteStats: counts,
-        votes: {}
+        votes: {},
+        impostorId: impostorId
       });
       return;
     }
@@ -1207,19 +1295,34 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
       return next;
     });
   };
+  const handleIncomingMessageRef = useRef(handleIncomingMessage);
+  const handlePlayerJoinedRef = useRef(handlePlayerJoined);
+  const handlePlayerDisconnectedRef = useRef(handlePlayerDisconnected);
+
+  useEffect(() => {
+    handleIncomingMessageRef.current = handleIncomingMessage;
+  }, [handleIncomingMessage]);
+
+  useEffect(() => {
+    handlePlayerJoinedRef.current = handlePlayerJoined;
+  }, [handlePlayerJoined]);
+
+  useEffect(() => {
+    handlePlayerDisconnectedRef.current = handlePlayerDisconnected;
+  }, [handlePlayerDisconnected]);
 
   const hostRoom = async (): Promise<string> => {
     setMultiplayerStatus('connecting');
     try {
       const code = await multiplayer.initHost(
-        handleIncomingMessage,
+        (senderId, msg) => handleIncomingMessageRef.current(senderId, msg),
         (status) => {
           if (status === 'connected') setMultiplayerStatus('connected');
           if (status === 'disconnected') setMultiplayerStatus('disconnected');
           if (status === 'error') setMultiplayerStatus('error');
         },
-        handlePlayerJoined,
-        handlePlayerDisconnected
+        (player) => handlePlayerJoinedRef.current(player),
+        (playerId) => handlePlayerDisconnectedRef.current(playerId)
       );
       setIsMultiplayer(true);
       setIsHost(true);
@@ -1244,15 +1347,27 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const joinRoom = async (code: string, name: string, avatar: string): Promise<void> => {
     setMultiplayerStatus('connecting');
+    receivedHostLeftRef.current = false;
     try {
       await multiplayer.initGuest(
         code,
         name,
         avatar,
-        handleIncomingMessage,
+        (senderId, msg) => handleIncomingMessageRef.current(senderId, msg),
         (status) => {
           if (status === 'connected') setMultiplayerStatus('connected');
-          if (status === 'disconnected') setMultiplayerStatus('disconnected');
+          if (status === 'disconnected') {
+            setMultiplayerStatus('disconnected');
+            leaveRoomRef.current();
+            if (!receivedHostLeftRef.current) {
+              showConfirmRef.current({
+                title: 'Disconnected',
+                message: 'Connection to the host was lost or the host closed the room.',
+                confirmText: 'OK',
+                onConfirm: () => {}
+              });
+            }
+          }
           if (status === 'error') setMultiplayerStatus('error');
         }
       );
@@ -1267,14 +1382,34 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  const leaveRoom = () => {
-    multiplayer.disconnect();
+  const leaveRoom = (isHostDisconnect = false) => {
+    const wasMultiplayer = multiplayer.roomCode !== '';
+    const wasHost = multiplayer.isHost;
+
+    if (wasMultiplayer && !isHostDisconnect) {
+      if (!wasHost) {
+        multiplayer.send({
+          type: 'LEAVE',
+          playerId: multiplayer.myPeerId
+        });
+      } else {
+        multiplayer.send({
+          type: 'HOST_LEFT'
+        });
+      }
+      setTimeout(() => {
+        multiplayer.disconnect();
+      }, 2000);
+    } else {
+      multiplayer.disconnect();
+    }
     setIsMultiplayer(false);
     setIsHost(false);
     setRoomCode('');
     setMyPlayerId('');
     setOnlinePlayers([]);
     setPlayersWhoRevealed([]);
+    setReadyPlayers([]);
     setMultiplayerStatus('idle');
     setGameState('HOME');
     setChatMessages([]);
@@ -1335,12 +1470,14 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setHistory(prev => [newHistoryItem, ...prev].slice(0, 10));
 
     setGameState('RESULTS');
+    setReadyPlayers([myPlayerId]);
 
     multiplayer.send({
       type: 'GAME_OVER',
       winner: gameWinner,
       voteStats: counts,
-      votes: finalVotes
+      votes: finalVotes,
+      impostorId: impostorId
     });
   };
 
@@ -1370,6 +1507,17 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const closeConfirm = () => {
     setConfirmConfig(null);
   };
+
+  const leaveRoomRef = useRef(leaveRoom);
+  const showConfirmRef = useRef(showConfirm);
+
+  useEffect(() => {
+    leaveRoomRef.current = leaveRoom;
+  }, [leaveRoom]);
+
+  useEffect(() => {
+    showConfirmRef.current = showConfirm;
+  }, [showConfirm]);
 
   // Save custom names & avatars when modified
   useEffect(() => {
@@ -1413,6 +1561,22 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
       multiplayer.send({ type: 'START_GAME_REQUEST' });
       return;
     }
+
+    if (!isMultiplayer) {
+      for (let i = 0; i < playerCount; i++) {
+        const name = customNames[i]?.trim() || `Player ${i + 1}`;
+        if (containsProfanity(name)) {
+          showConfirm({
+            title: 'Inappropriate Name Detected',
+            message: `Player ${i + 1}'s name contains vulgar language. Please use a clean name before starting.`,
+            confirmText: 'OK',
+            onConfirm: () => {}
+          });
+          return;
+        }
+      }
+    }
+
     playClick();
     // 1. Select word pair
     const recentCommonWords = history.map(h => h.commonWord);
@@ -1686,6 +1850,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setPlayersWhoRevealed([]);
         setWinner(null);
         setVoteStats({});
+        setReadyPlayers([]);
         setGameState('SETUP');
         multiplayer.send({
           type: 'PLAY_AGAIN'
@@ -1693,6 +1858,30 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
     } else {
       startGame();
+    }
+  };
+
+  const setPlayerReady = (ready: boolean) => {
+    playClick();
+    if (!isMultiplayer) return;
+
+    if (isHost) {
+      setReadyPlayers(prev => {
+        const next = ready
+          ? (prev.includes(myPlayerId) ? prev : [...prev, myPlayerId])
+          : prev.filter(id => id !== myPlayerId);
+        multiplayer.send({
+          type: 'READY_STATUS_UPDATE',
+          readyPlayers: next
+        });
+        return next;
+      });
+    } else {
+      multiplayer.send({
+        type: 'PLAYER_READY',
+        playerId: myPlayerId,
+        isReady: ready
+      });
     }
   };
 
@@ -1713,6 +1902,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setVotes({});
     setWinner(null);
     setVoteStats({});
+    setReadyPlayers([]);
     setGameState('HOME');
     setChatMessages([]);
     setIsChatOpen(false);
@@ -1799,6 +1989,8 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
         multiplayerStatus,
         onlinePlayers,
         playersWhoRevealed,
+        readyPlayers,
+        setPlayerReady,
         activeClueIndex,
         setActiveClueIndex,
         timerSeconds,

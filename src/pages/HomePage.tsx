@@ -3,6 +3,7 @@ import { useGame, AVATAR_POOL } from '../context/GameContext';
 import { Button } from '../components/Button';
 import { Card } from '../components/Card';
 import { playClick } from '../utils/sounds';
+import { containsProfanity } from '../utils/profanityFilter';
 import { 
   ShieldAlert, 
   BookOpen, 
@@ -80,6 +81,10 @@ export const HomePage: React.FC = () => {
     }
     if (!joinName.trim()) {
       setJoinError('Player name is required!');
+      return;
+    }
+    if (containsProfanity(joinName.trim())) {
+      setJoinError('Name contains vulgar or inappropriate language!');
       return;
     }
 
@@ -210,6 +215,20 @@ export const HomePage: React.FC = () => {
           >
             <BookOpen className="w-5 h-5 mr-2 text-brand-secondary group-hover:scale-110 transition-transform" />
             How to Play
+          </Button>
+
+          <Button 
+            variant="glass" 
+            size="lg" 
+            fullWidth 
+            onClick={() => {
+              playClick();
+              setGameState('CHANGELOG');
+            }}
+            className="group py-3.5 rounded-2xl font-bold"
+          >
+            <History className="w-5 h-5 mr-2 text-brand-primary group-hover:scale-110 transition-transform" />
+            Update Changelogs
           </Button>
         </Card>
 

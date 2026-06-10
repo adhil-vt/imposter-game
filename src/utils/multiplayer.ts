@@ -17,7 +17,7 @@ export type NetworkMessage =
   | { type: 'REVEAL_PROGRESS'; revealedPlayers: string[] }
   | { type: 'TIMER_SYNC'; activeClueIndex: number; timerSeconds: number; timerActive: boolean }
   | { type: 'VOTE_CAST'; voterId: string; votedId: string }
-  | { type: 'GAME_OVER'; winner: 'CREWMATES' | 'IMPOSTOR'; voteStats: Record<string, number>; votes: Record<string, string> }
+  | { type: 'GAME_OVER'; winner: 'CREWMATES' | 'IMPOSTOR'; voteStats: Record<string, number>; votes: Record<string, string>; impostorId: string }
   | { type: 'PLAY_AGAIN' }
   | { type: 'STATE_CHANGE'; state: string }
   | { type: 'KICKED' }
@@ -29,7 +29,11 @@ export type NetworkMessage =
   | { type: 'BAN_REQUEST'; targetId: string }
   | { type: 'START_GAME_REQUEST' }
   | { type: 'RESTART_GAME_REQUEST' }
-  | { type: 'RENAME_PLAYER'; playerId: string; name: string };
+  | { type: 'RENAME_PLAYER'; playerId: string; name: string }
+  | { type: 'PLAYER_READY'; playerId: string; isReady: boolean }
+  | { type: 'READY_STATUS_UPDATE'; readyPlayers: string[] }
+  | { type: 'LEAVE'; playerId: string }
+  | { type: 'HOST_LEFT' };
 
 class MultiplayerService {
   private peer: Peer | null = null;
@@ -220,6 +224,20 @@ class MultiplayerService {
     }
   }
 
+  public closeConnection(playerId: string) {
+    if (this.isHost) {
+      const conn = this.connections[playerId];
+      if (conn) {
+        try {
+          conn.close();
+        } catch (e) {
+          console.error('Error closing connection:', e);
+        }
+        delete this.connections[playerId];
+      }
+    }
+  }
+
   public banPlayer(playerId: string) {
     if (this.isHost) {
       this.bannedIds.add(playerId);
@@ -228,13 +246,25 @@ class MultiplayerService {
   }
 
   public disconnect() {
-    Object.values(this.connections).forEach((conn) => conn.close());
+    Object.values(this.connections).forEach((conn) => {
+      try {
+        conn.close();
+      } catch (e) {
+        console.error('Error closing connection:', e);
+      }
+    });
     this.connections = {};
     this.pendingMessages = {};
+    
     if (this.peer) {
-      this.peer.destroy();
+      try {
+        this.peer.destroy();
+      } catch (e) {
+        console.error('Error destroying peer:', e);
+      }
       this.peer = null;
     }
+    
     this.bannedIds.clear();
     this.isHost = false;
     this.roomCode = '';

@@ -246,23 +246,35 @@ export const CreateGamePage: React.FC = () => {
                 </span>
                 {player.id === myPlayerId ? (
                   isEditingName ? (
-                    <input
-                      type="text"
-                      maxLength={14}
-                      value={editingNameVal}
-                      onChange={(e) => setEditingNameVal(e.target.value)}
-                      onBlur={handleSaveName}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter') {
-                          handleSaveName();
-                        } else if (e.key === 'Escape') {
-                          setIsEditingName(false);
-                        }
-                      }}
-                      onClick={(e) => e.stopPropagation()}
-                      autoFocus
-                      className="bg-transparent text-sm font-bold text-white border-b border-brand-primary/50 focus:outline-none w-32 px-0.5"
-                    />
+                    <div className="flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
+                      <input
+                        type="text"
+                        maxLength={14}
+                        value={editingNameVal}
+                        onChange={(e) => setEditingNameVal(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            handleSaveName();
+                          } else if (e.key === 'Escape') {
+                            setIsEditingName(false);
+                          }
+                        }}
+                        autoFocus
+                        className="bg-white/5 text-sm font-bold text-white border border-white/10 rounded-lg px-2 py-0.5 focus:outline-none focus:border-brand-primary w-24 sm:w-32"
+                      />
+                      <button
+                        onClick={handleSaveName}
+                        className="px-2 py-1 bg-brand-primary hover:bg-brand-primary/90 text-white text-[10px] font-black rounded-lg transition-colors cursor-pointer select-none"
+                      >
+                        Save
+                      </button>
+                      <button
+                        onClick={() => setIsEditingName(false)}
+                        className="px-2 py-1 bg-white/10 hover:bg-white/15 text-slate-300 text-[10px] font-black rounded-lg transition-colors cursor-pointer select-none"
+                      >
+                        Cancel
+                      </button>
+                    </div>
                   ) : (
                     <span 
                       className="text-sm font-bold text-slate-200 flex items-center gap-1.5 hover:text-white transition-colors"
@@ -371,7 +383,7 @@ export const CreateGamePage: React.FC = () => {
       </div>
 
       {/* Messages list */}
-      <div ref={chatContainerRef} className="flex-1 overflow-y-auto py-3 pr-1 flex flex-col gap-3 scrollbar-thin max-h-[190px]">
+      <div ref={chatContainerRef} className="flex-1 overflow-y-auto py-3 pr-1 flex flex-col gap-3 custom-scrollbar max-h-[190px]">
         {chatMessages.length === 0 ? (
           <div className="flex-1 flex flex-col items-center justify-center text-center opacity-40 p-4 select-none h-full">
             <MessageSquare className="w-8 h-8 text-slate-500 mb-2 stroke-[1.5]" />
@@ -408,7 +420,7 @@ export const CreateGamePage: React.FC = () => {
                   <span className="w-7 h-7 rounded-lg bg-white/5 border border-white/10 flex items-center justify-center text-sm shadow-sm select-none shrink-0 self-end">
                     {msg.senderAvatar}
                   </span>
-                  <div className={`flex flex-col ${isMe ? 'items-end' : 'items-start'}`}>
+                  <div className={`flex flex-col min-w-0 ${isMe ? 'items-end' : 'items-start'}`}>
                     <div className="flex items-center gap-1 text-[8px] text-slate-500 font-extrabold mb-0.5 select-none">
                       <span>{msg.senderName}</span>
                       <span>&bull;</span>
@@ -448,11 +460,11 @@ export const CreateGamePage: React.FC = () => {
           >
             <input
               type="text"
-              maxLength={100}
+              maxLength={60}
               value={chatInput}
               onChange={(e) => setChatInput(e.target.value)}
               disabled={isRestricted}
-              placeholder={isRestricted ? "You are restricted from chatting by host" : "Type a message..."}
+              placeholder={isRestricted ? "You are restricted from chatting by host" : "Type a message... (max 60 chars)"}
               className="flex-1 bg-white/5 border border-white/10 rounded-xl px-4 py-2 text-xs font-bold text-slate-200 focus:outline-none focus:border-brand-secondary placeholder-slate-600 disabled:opacity-50 disabled:pointer-events-none"
             />
             <button

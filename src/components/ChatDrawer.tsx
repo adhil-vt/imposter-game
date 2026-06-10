@@ -164,7 +164,7 @@ export const ChatDrawer: React.FC<ChatDrawerProps> = ({ embedded = false }) => {
             {msg.senderAvatar}
           </span>
 
-          <div className={`flex flex-col ${isMe ? 'items-end' : 'items-start'}`}>
+          <div className={`flex flex-col min-w-0 ${isMe ? 'items-end' : 'items-start'}`}>
             <div className="flex items-center gap-1.5 text-[9px] text-slate-500 font-extrabold mb-1 select-none">
               <span>{msg.senderName}</span>
               <span>&bull;</span>
@@ -197,11 +197,11 @@ export const ChatDrawer: React.FC<ChatDrawerProps> = ({ embedded = false }) => {
       >
         <input
           type="text"
-          maxLength={100}
+          maxLength={60}
           value={inputText}
           onChange={(e) => setInputText(e.target.value)}
           disabled={isRestricted}
-          placeholder={isRestricted ? 'You are restricted from chatting by host' : 'Type a message...'}
+          placeholder={isRestricted ? 'You are restricted from chatting by host' : 'Type a message... (max 60 chars)'}
           className="flex-1 bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-xs font-bold text-slate-200 focus:outline-none focus:border-brand-primary placeholder-slate-600 disabled:opacity-50 disabled:pointer-events-none"
         />
         <button
@@ -234,7 +234,7 @@ export const ChatDrawer: React.FC<ChatDrawerProps> = ({ embedded = false }) => {
 
         <div
           ref={messagesContainerRef}
-          className="flex-1 min-h-0 overflow-y-auto p-4 flex flex-col gap-4 scrollbar-thin"
+          className="flex-1 min-h-0 overflow-y-auto p-4 flex flex-col gap-4 custom-scrollbar"
         >
           {renderMessages()}
           <div ref={messagesEndRef} />
@@ -311,7 +311,7 @@ export const ChatDrawer: React.FC<ChatDrawerProps> = ({ embedded = false }) => {
 
         <div
           ref={messagesContainerRef}
-          className="flex-1 min-h-0 overflow-y-auto p-4 flex flex-col gap-4 scrollbar-thin"
+          className="flex-1 min-h-0 overflow-y-auto p-4 flex flex-col gap-4 custom-scrollbar"
         >
           {renderMessages()}
           <div ref={messagesEndRef} />
