@@ -2,6 +2,7 @@ import { GameProvider, useGame } from './context/GameContext';
 import { Header } from './components/Header';
 import { CustomCursor } from './components/CustomCursor';
 import { ConfirmModal } from './components/ConfirmModal';
+import { VoteModerationModal } from './components/VoteModerationModal';
 import { ChatDrawer } from './components/ChatDrawer';
 import { HomePage } from './pages/HomePage';
 import { CreateGamePage } from './pages/CreateGamePage';
@@ -67,6 +68,9 @@ function GameContent() {
 
       {/* Global Custom Confirmation Modal */}
       <ConfirmModal />
+
+      {/* Global Vote Moderation Modal */}
+      <VoteModerationModal />
 
       {/* Global Multiplayer Chat Panel */}
       {gameState !== 'REVEAL' && <ChatDrawer />}

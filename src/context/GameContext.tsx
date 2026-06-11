@@ -237,18 +237,33 @@ interface GameContextType {
   unreadChatCount: number;
   setUnreadChatCount: (count: number) => void;
   sendChatMessage: (text: string) => void;
-  kickPlayer: (playerId: string) => void;
+  kickPlayer: (playerId: string, reason?: string) => void;
   isLobbyAdmin: boolean;
   lobbyAdminId: string;
   toggleMutePlayer: (playerId: string) => void;
   mutedPlayerIds: string[];
-  banPlayer: (playerId: string) => void;
+  banPlayer: (playerId: string, reason?: string) => void;
   transferHost: (playerId: string) => void;
   updatePlayerName: (newName: string) => void;
   roomNotice: {
     id: string;
     text: string;
   } | null;
+
+  // Vote moderation
+  activeVote: {
+    voteId: string;
+    action: 'kick' | 'ban';
+    targetId: string;
+    targetName: string;
+    initiatorId: string;
+    initiatorName: string;
+    reason?: string;
+    votes: Record<string, 'yes' | 'no'>;
+  } | null;
+  startVoteKick: (playerId: string, reason?: string) => void;
+  startVoteBan: (playerId: string, reason?: string) => void;
+  castModerationVote: (vote: 'yes' | 'no') => void;
 }
 
 const GameContext = createContext<GameContextType | undefined>(undefined);
@@ -479,6 +494,11 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
+  // Vote moderation state
+  const [activeVote, setActiveVote] = useState<GameContextType['activeVote']>(null);
+  const activeVoteRef = useRef<GameContextType['activeVote']>(null);
+  useEffect(() => { activeVoteRef.current = activeVote; }, [activeVote]);
+
   // Sync lobby settings across multiplayer network if we are the admin
   useEffect(() => {
     if (isMultiplayer && isLobbyAdmin) {
@@ -587,20 +607,21 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  const kickPlayer = (playerId: string) => {
+  const kickPlayer = (playerId: string, reason?: string) => {
     if (isMultiplayer) {
       if (isHost) {
         const kickedPlayer = onlinePlayers.find(p => p.id === playerId);
         if (kickedPlayer) {
           kickedPlayersRef.current.add(playerId);
-          multiplayer.kickPlayer(playerId);
+          multiplayer.kickPlayer(playerId, reason);
           
+          const reasonText = reason ? ` Reason: ${reason}` : '';
           const systemMsg: ChatMessage = {
             id: `sys_${Date.now()}_${Math.random()}`,
             senderId: 'system',
             senderName: 'System',
             senderAvatar: '🤖',
-            text: `${kickedPlayer.name} was kicked from the room.`,
+            text: `${kickedPlayer.name} was kicked from the room.${reasonText}`,
             timestamp: Date.now(),
             isSystem: true
           };
@@ -614,26 +635,28 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
       } else {
         multiplayer.send({
           type: 'KICK_REQUEST',
-          targetId: playerId
+          targetId: playerId,
+          reason
         });
       }
     }
   };
 
-  const banPlayer = (playerId: string) => {
+  const banPlayer = (playerId: string, reason?: string) => {
     if (isMultiplayer) {
       if (isHost) {
         const bannedPlayer = onlinePlayers.find(p => p.id === playerId);
         if (bannedPlayer) {
           kickedPlayersRef.current.add(playerId);
-          multiplayer.banPlayer(playerId);
+          multiplayer.banPlayer(playerId, reason);
           
+          const reasonText = reason ? ` Reason: ${reason}` : '';
           const systemMsg: ChatMessage = {
             id: `sys_${Date.now()}_${Math.random()}`,
             senderId: 'system',
             senderName: 'System',
             senderAvatar: '🚫',
-            text: `${bannedPlayer.name} was banned from the room.`,
+            text: `${bannedPlayer.name} was banned from the room.${reasonText}`,
             timestamp: Date.now(),
             isSystem: true
           };
@@ -647,9 +670,145 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
       } else {
         multiplayer.send({
           type: 'BAN_REQUEST',
-          targetId: playerId
+          targetId: playerId,
+          reason
         });
       }
+    }
+  };
+
+  const startVoteKick = (playerId: string, reason?: string) => {
+    if (!isMultiplayer) return;
+    const target = onlinePlayers.find(p => p.id === playerId);
+    const me = onlinePlayers.find(p => p.id === myPlayerId);
+    if (!target || !me) return;
+    const voteId = `vote_${Date.now()}_${Math.random().toString(36).slice(2)}`;
+    const voteMsg: NetworkMessage = {
+      type: 'VOTE_MOD_START',
+      voteId,
+      action: 'kick',
+      targetId: playerId,
+      targetName: target.name,
+      initiatorId: myPlayerId,
+      initiatorName: me.name,
+      reason
+    };
+    if (isHost) {
+      multiplayer.send(voteMsg);
+    } else {
+      multiplayer.send(voteMsg);
+    }
+    setActiveVote({
+      voteId,
+      action: 'kick',
+      targetId: playerId,
+      targetName: target.name,
+      initiatorId: myPlayerId,
+      initiatorName: me.name,
+      reason,
+      votes: { [myPlayerId]: 'yes' }
+    });
+  };
+
+  const startVoteBan = (playerId: string, reason?: string) => {
+    if (!isMultiplayer) return;
+    const target = onlinePlayers.find(p => p.id === playerId);
+    const me = onlinePlayers.find(p => p.id === myPlayerId);
+    if (!target || !me) return;
+    const voteId = `vote_${Date.now()}_${Math.random().toString(36).slice(2)}`;
+    const voteMsg: NetworkMessage = {
+      type: 'VOTE_MOD_START',
+      voteId,
+      action: 'ban',
+      targetId: playerId,
+      targetName: target.name,
+      initiatorId: myPlayerId,
+      initiatorName: me.name,
+      reason
+    };
+    if (isHost) {
+      multiplayer.send(voteMsg);
+    } else {
+      multiplayer.send(voteMsg);
+    }
+    setActiveVote({
+      voteId,
+      action: 'ban',
+      targetId: playerId,
+      targetName: target.name,
+      initiatorId: myPlayerId,
+      initiatorName: me.name,
+      reason,
+      votes: { [myPlayerId]: 'yes' }
+    });
+  };
+
+  const castModerationVote = (vote: 'yes' | 'no') => {
+    if (!isMultiplayer || !activeVote) return;
+    const voteMsg: NetworkMessage = {
+      type: 'VOTE_MOD_CAST',
+      voteId: activeVote.voteId,
+      voterId: myPlayerId,
+      vote
+    };
+    if (isHost) {
+      multiplayer.send(voteMsg);
+      handleModerationVoteCast(myPlayerId, activeVote.voteId, vote);
+    } else {
+      multiplayer.send(voteMsg);
+      setActiveVote(prev => prev ? { ...prev, votes: { ...prev.votes, [myPlayerId]: vote } } : null);
+    }
+  };
+
+  const handleModerationVoteCast = (voterId: string, voteId: string, vote: 'yes' | 'no') => {
+    const currentVote = activeVoteRef.current;
+    if (!currentVote || currentVote.voteId !== voteId) return;
+
+    const updatedVotes = { ...currentVote.votes, [voterId]: vote };
+    const eligibleVoters = onlinePlayersRef.current.filter(p => p.id !== currentVote.targetId);
+    const totalEligible = eligibleVoters.length;
+    const totalCast = Object.keys(updatedVotes).length;
+    const yesCount = Object.values(updatedVotes).filter(v => v === 'yes').length;
+
+    setActiveVote(prev => prev ? { ...prev, votes: updatedVotes } : null);
+
+    if (totalCast >= totalEligible) {
+      const passed = yesCount > totalEligible / 2;
+      const resultMsg: NetworkMessage = {
+        type: 'VOTE_MOD_RESULT',
+        voteId,
+        action: currentVote.action,
+        targetId: currentVote.targetId,
+        targetName: currentVote.targetName,
+        passed,
+        reason: currentVote.reason
+      };
+      multiplayer.send(resultMsg);
+
+      if (passed) {
+        if (currentVote.action === 'ban') {
+          banPlayer(currentVote.targetId, currentVote.reason);
+        } else {
+          kickPlayer(currentVote.targetId, currentVote.reason);
+        }
+      }
+
+      const actionWord = currentVote.action === 'ban' ? 'ban' : 'kick';
+      const systemMsg: ChatMessage = {
+        id: `sys_${Date.now()}_${Math.random()}`,
+        senderId: 'system',
+        senderName: 'System',
+        senderAvatar: passed ? '⚖️' : '🗳️',
+        text: passed
+          ? `Vote to ${actionWord} ${currentVote.targetName} passed (${yesCount}/${totalEligible}).`
+          : `Vote to ${actionWord} ${currentVote.targetName} failed (${yesCount}/${totalEligible}).`,
+        timestamp: Date.now(),
+        isSystem: true
+      };
+      setChatMessages(prev => [...prev, systemMsg]);
+      multiplayer.send({ type: 'CHAT', message: systemMsg });
+
+      setTimeout(() => setActiveVote(null), 2000);
     }
   };
 
@@ -933,7 +1092,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
         if (isHost) {
           const sender = onlinePlayersRef.current.find(p => p.id === _senderId);
           if (sender?.isAdmin) {
-            kickPlayer(msg.targetId);
+            kickPlayer(msg.targetId, msg.reason);
           }
         }
         break;
@@ -942,7 +1101,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
         if (isHost) {
           const sender = onlinePlayersRef.current.find(p => p.id === _senderId);
           if (sender?.isAdmin) {
-            banPlayer(msg.targetId);
+            banPlayer(msg.targetId, msg.reason);
           }
         }
         break;
@@ -1060,10 +1219,73 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
         leaveRoom();
         showConfirm({
           title: 'Kicked from Room',
-          message: 'You have been kicked from the room by the host.',
+          message: msg.reason
+            ? `You have been kicked from the room. Reason: ${msg.reason}`
+            : 'You have been kicked from the room by the host.',
           confirmText: 'OK',
           onConfirm: () => {}
         });
+        break;
+
+      case 'BANNED':
+        leaveRoom();
+        showConfirm({
+          title: 'Banned from Room',
+          message: msg.reason
+            ? `You have been banned from the room. Reason: ${msg.reason}`
+            : 'You have been banned from the room by the host. You cannot rejoin.',
+          confirmText: 'OK',
+          onConfirm: () => {}
+        });
+        break;
+
+      case 'VOTE_MOD_START':
+        if (isHost) {
+          multiplayer.broadcastExcept(_senderId, msg);
+        }
+        if (msg.initiatorId !== myPlayerIdRef.current) {
+          setActiveVote({
+            voteId: msg.voteId,
+            action: msg.action,
+            targetId: msg.targetId,
+            targetName: msg.targetName,
+            initiatorId: msg.initiatorId,
+            initiatorName: msg.initiatorName,
+            reason: msg.reason,
+            votes: { [msg.initiatorId]: 'yes' }
+          });
+        }
+        break;
+
+      case 'VOTE_MOD_CAST':
+        if (isHost) {
+          multiplayer.broadcastExcept(_senderId, msg);
+          handleModerationVoteCast(msg.voterId, msg.voteId, msg.vote);
+        } else {
+          setActiveVote(prev => {
+            if (!prev || prev.voteId !== msg.voteId) return prev;
+            return { ...prev, votes: { ...prev.votes, [msg.voterId]: msg.vote } };
+          });
+        }
+        break;
+
+      case 'VOTE_MOD_RESULT':
+        if (!isHost) {
+          const actionWord = msg.action === 'ban' ? 'ban' : 'kick';
+          const sysMsg: ChatMessage = {
+            id: `sys_${Date.now()}_${Math.random()}`,
+            senderId: 'system',
+            senderName: 'System',
+            senderAvatar: msg.passed ? '⚖️' : '🗳️',
+            text: msg.passed
+              ? `Vote to ${actionWord} ${msg.targetName} passed.`
+              : `Vote to ${actionWord} ${msg.targetName} failed.`,
+            timestamp: Date.now(),
+            isSystem: true
+          };
+          setChatMessages(prev => [...prev, sysMsg]);
+          setTimeout(() => setActiveVote(null), 2000);
+        }
         break;
 
       case 'CHAT':
@@ -2052,6 +2274,10 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
         transferHost,
         updatePlayerName,
         roomNotice,
+        activeVote,
+        startVoteKick,
+        startVoteBan,
+        castModerationVote,
       }}
     >
       {children}
