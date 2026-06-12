@@ -37,6 +37,12 @@ export const ChatDrawer: React.FC<ChatDrawerProps> = ({ embedded = false }) => {
     speakerVolume,
     setSpeakerVolume,
     playersSpeaking,
+    micMuted,
+    toggleMicMute,
+    deafenAll,
+    toggleDeafenAll,
+    deafenedPlayerIds,
+    toggleDeafenPlayer,
   } = useGame();
 
   const [inputText, setInputText] = useState('');
@@ -247,6 +253,37 @@ export const ChatDrawer: React.FC<ChatDrawerProps> = ({ embedded = false }) => {
 
         {isVoiceActive && (
           <>
+            {/* Mic & Deafen Controls */}
+            <div className="flex flex-col gap-2">
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  onClick={() => toggleMicMute()}
+                  className={`py-2.5 px-3 rounded-xl text-[10px] font-bold flex items-center justify-center gap-1.5 border transition-all cursor-pointer ${
+                    micMuted
+                      ? 'bg-rose-500/10 border-rose-500/30 text-rose-400'
+                      : 'bg-white/5 border-white/10 text-slate-300 hover:bg-white/10'
+                  }`}
+                  title={micMuted ? 'Unmute microphone' : 'Mute microphone'}
+                >
+                  <MicOff className="w-3.5 h-3.5" />
+                  {micMuted ? 'Muted' : 'Mute'}
+                </button>
+
+                <button
+                  onClick={() => toggleDeafenAll()}
+                  className={`py-2.5 px-3 rounded-xl text-[10px] font-bold flex items-center justify-center gap-1.5 border transition-all cursor-pointer ${
+                    deafenAll
+                      ? 'bg-brand-warning/10 border-brand-warning/30 text-brand-warning'
+                      : 'bg-white/5 border-white/10 text-slate-300 hover:bg-white/10'
+                  }`}
+                  title={deafenAll ? 'Undeafen all' : 'Deafen all'}
+                >
+                  <Volume2 className="w-3.5 h-3.5" />
+                  {deafenAll ? 'Deafened' : 'Deafen'}
+                </button>
+              </div>
+            </div>
+
             {/* Input & Output Sliders */}
             <div className="flex flex-col gap-4 bg-white/[0.01] border border-white/5 p-4 rounded-2xl">
               {/* Mic Volume */}
@@ -303,7 +340,8 @@ export const ChatDrawer: React.FC<ChatDrawerProps> = ({ embedded = false }) => {
                 {onlinePlayers.map((player) => {
                   const isMe = player.id === myPlayerId;
                   const isSpeaking = isMe ? false : !!playersSpeaking[player.id];
-                  
+                  const isDeafened = deafenedPlayerIds.includes(player.id);
+
                   return (
                     <div
                       key={player.id}
@@ -321,8 +359,22 @@ export const ChatDrawer: React.FC<ChatDrawerProps> = ({ embedded = false }) => {
                           {isMe && <span className="text-[9px] text-slate-500 font-bold ml-1 italic">(You)</span>}
                         </span>
                       </div>
-                      
+
                       <div className="flex items-center gap-2">
+                        {!isMe && (
+                          <button
+                            onClick={() => toggleDeafenPlayer(player.id)}
+                            className={`p-1.5 rounded-lg transition-all cursor-pointer ${
+                              isDeafened
+                                ? 'bg-rose-500/20 border border-rose-500/40 text-rose-400'
+                                : 'bg-white/5 border border-white/10 text-slate-400 hover:bg-white/10'
+                            }`}
+                            title={isDeafened ? 'Undeafen player' : 'Deafen player'}
+                          >
+                            <Volume2 className="w-3 h-3" />
+                          </button>
+                        )}
+
                         {player.isVoiceActive ? (
                           isSpeaking ? (
                             <span className="text-[9px] bg-emerald-400/10 border border-emerald-500/25 text-emerald-400 px-2 py-0.5 rounded font-black uppercase tracking-wider flex items-center gap-0.5 animate-pulse">

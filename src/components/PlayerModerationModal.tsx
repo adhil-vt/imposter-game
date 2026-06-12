@@ -30,15 +30,25 @@ export const PlayerModerationModal: React.FC<PlayerModerationModalProps> = ({
     voteToKickPlayer,
     voteToBanPlayer,
     lobbyAdminId,
-    micMuted, toggleMicMute, deafenAll, toggleDeafenAll, deafenedPlayerIds, toggleDeafenPlayer
+    micMuted,
+    toggleMicMute,
+    deafenAll,
+    toggleDeafenAll,
+    deafenedPlayerIds,
+    toggleDeafenPlayer,
   } = useGame();
 
   const isMe = playerId === myPlayerId;
   const isMuted = mutedPlayerIds.includes(playerId);
+  const isDeafened = deafenedPlayerIds.includes(playerId);
   const isHostTarget = playerId === lobbyAdminId;
 
   const handleToggleMute = () => {
     toggleMutePlayer(playerId);
+  };
+
+  const handleToggleDeafen = () => {
+    toggleDeafenPlayer(playerId);
   };
 
   const handleVoteKick = () => {
@@ -126,23 +136,43 @@ export const PlayerModerationModal: React.FC<PlayerModerationModalProps> = ({
 
           {/* Mute Chat — available to everyone for any non-self player */}
           {!isMe && (
-            <Button
-              variant="glass"
-              onClick={handleToggleMute}
-              className="w-full py-3 rounded-xl text-xs font-bold flex items-center justify-center gap-2 border border-white/10 hover:bg-white/10"
-            >
-              {isMuted ? (
-                <>
-                  <Volume2 className="w-4 h-4 text-brand-accent animate-pulse" />
-                  Unmute Player Chat
-                </>
-              ) : (
-                <>
-                  <VolumeX className="w-4 h-4 text-brand-warning" />
-                  Mute Player Chat
-                </>
-              )}
-            </Button>
+            <>
+              <Button
+                variant="glass"
+                onClick={handleToggleMute}
+                className="w-full py-3 rounded-xl text-xs font-bold flex items-center justify-center gap-2 border border-white/10 hover:bg-white/10"
+              >
+                {isMuted ? (
+                  <>
+                    <Volume2 className="w-4 h-4 text-brand-accent animate-pulse" />
+                    Unmute Player Chat
+                  </>
+                ) : (
+                  <>
+                    <VolumeX className="w-4 h-4 text-brand-warning" />
+                    Mute Player Chat
+                  </>
+                )}
+              </Button>
+
+              <Button
+                variant="glass"
+                onClick={handleToggleDeafen}
+                className="w-full py-3 rounded-xl text-xs font-bold flex items-center justify-center gap-2 border border-white/10 hover:bg-white/10"
+              >
+                {isDeafened ? (
+                  <>
+                    <Volume2 className="w-4 h-4 text-brand-accent animate-pulse" />
+                    Undeafen Player Audio
+                  </>
+                ) : (
+                  <>
+                    <Headphones className="w-4 h-4 text-brand-warning" />
+                    Deafen Player Audio
+                  </>
+                )}
+              </Button>
+            </>
           )}
 
           {/* Democratic Vote Moderation — available to everyone; guests/host cannot vote on the host */}
