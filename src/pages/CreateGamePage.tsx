@@ -105,6 +105,7 @@ export const CreateGamePage: React.FC = () => {
     toggleMutePlayer,
     transferHost,
     playersSpeaking,
+    playersVolume,
     isVoiceActive,
     toggleVoice,
     micVolume,
@@ -323,13 +324,16 @@ export const CreateGamePage: React.FC = () => {
               className={`flex items-center justify-between bg-white/[0.02] border border-white/5 p-3 rounded-xl transition-all duration-300 ${player.id === myPlayerId ? 'hover:bg-white/[0.04] cursor-pointer' : ''}`}
             >
               <div className="flex items-center gap-2.5">
-                <span className={`w-9 h-9 rounded-xl bg-white/5 border flex items-center justify-center text-lg shadow-sm transition-all duration-300 ${
-                  playersSpeaking[player.id]
-                    ? 'ring-2 ring-emerald-400 border-emerald-400 shadow-[0_0_10px_rgba(52,211,153,0.25)] animate-pulse'
-                    : 'border-white/10'
-                }`}>
-                  {player.avatar}
-                </span>
+                {(() => {
+                  const vol = playersVolume[player.id] || 0;
+                  const ring = playersSpeaking[player.id] ? `ring-2 ring-emerald-400` : '';
+                  const glow = playersSpeaking[player.id] ? { boxShadow: `0 0 ${8 + vol * 24}px rgba(52,211,153,${0.15 + vol * 0.6})` } : {};
+                  return (
+                    <span style={glow} className={`w-9 h-9 rounded-xl bg-white/5 border flex items-center justify-center text-lg shadow-sm transition-all duration-300 ${ring} ${playersSpeaking[player.id] ? 'border-emerald-400 animate-pulse' : 'border-white/10'}`}>
+                      {player.avatar}
+                    </span>
+                  );
+                })()}
                 {player.id === myPlayerId ? (
                   isEditingName ? (
                     <div className="flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
@@ -760,11 +764,15 @@ export const CreateGamePage: React.FC = () => {
                         className="flex items-center justify-between p-2 rounded-xl bg-white/[0.01] border border-white/5 select-none"
                       >
                         <div className="flex items-center gap-2 min-w-0">
-                          <div className={`relative transition-shadow duration-300 w-6 h-6 rounded-lg bg-white/5 border border-white/10 flex items-center justify-center text-xs shrink-0 ${
-                            isSpeaking ? 'ring-2 ring-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.3)] animate-pulse' : ''
-                          }`}>
-                            {player.avatar}
-                          </div>
+                          {(() => {
+                            const vol = playersVolume[player.id] || 0;
+                            const glow = isSpeaking ? { boxShadow: `0 0 ${6 + vol * 20}px rgba(52,211,153,${0.12 + vol * 0.6})` } : {};
+                            return (
+                              <div style={glow} className={`relative transition-shadow duration-300 w-6 h-6 rounded-lg bg-white/5 border border-white/10 flex items-center justify-center text-xs shrink-0 ${isSpeaking ? 'ring-2 ring-emerald-400 animate-pulse' : ''}`}>
+                                {player.avatar}
+                              </div>
+                            );
+                          })()}
                           <span className="text-[11px] font-bold text-slate-200 truncate">
                             {player.name}
                             {isMe && <span className="text-[9px] text-slate-500 font-bold ml-1 italic">(You)</span>}

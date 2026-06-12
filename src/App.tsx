@@ -26,6 +26,7 @@ function GameContent() {
     setSelectedModerationPlayer,
     isVoiceActive,
     playersSpeaking,
+    playersVolume,
     onlinePlayers,
     myPlayerId,
     isMultiplayer,
@@ -125,14 +126,19 @@ function GameContent() {
           {onlinePlayers.filter(p => playersSpeaking[p.id] && p.id !== myPlayerId).length > 0 ? (
             onlinePlayers
               .filter(p => playersSpeaking[p.id] && p.id !== myPlayerId)
-              .map(p => (
+              .map(p => {
+                const vol = playersVolume[p.id] || 0;
+                const dotSize = Math.max(6, Math.min(18, 6 + vol * 30));
+                const pulseSize = Math.max(16, Math.min(44, 16 + vol * 120));
+                const intensity = Math.min(1, 0.15 + vol * 1.5);
+                return (
                 <div
                   key={p.id}
                   className="flex items-center gap-2 px-3 py-2 rounded-2xl border border-emerald-500/20 bg-brand-dark/80 backdrop-blur-md shadow-[0_0_15px_rgba(52,211,153,0.15)] animate-fade-in-right"
                 >
-                  <div className="relative flex items-center justify-center">
-                    <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-                    <span className="absolute w-4 h-4 rounded-full bg-emerald-400/35 animate-ping" />
+                  <div className="relative flex items-center justify-center" style={{ width: pulseSize, height: pulseSize }}>
+                    <span style={{ width: dotSize, height: dotSize, borderRadius: '9999px', background: `rgba(52,211,153,${0.9})`, boxShadow: `0 0 ${8 + vol * 20}px rgba(52,211,153,${intensity})` }} />
+                    <span className="absolute rounded-full bg-emerald-400/35" style={{ width: pulseSize, height: pulseSize, opacity: Math.min(0.9, vol * 1.6), transform: 'translate(-50%, -50%)', left: '50%', top: '50%' }} />
                   </div>
                   <span className="text-[15px]">{p.avatar}</span>
                   <span className="text-xs font-black text-slate-100 tracking-wide pr-1">
@@ -142,7 +148,7 @@ function GameContent() {
                     Speaking
                   </span>
                 </div>
-              ))
+              )})
           ) : (
             <div className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl border border-white/5 bg-brand-dark/60 backdrop-blur-sm shadow-md text-slate-400">
               <Mic className="w-3.5 h-3.5 text-brand-secondary animate-pulse" />

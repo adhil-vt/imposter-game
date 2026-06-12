@@ -2,15 +2,15 @@
 import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
 import { getRandomWordPair } from '../data/words';
 import type { CategoryKey, WordPair, VisualAid, DifficultyKey } from '../data/words';
-import { 
-  playClick, 
-  playFlip, 
-  playWin, 
-  playLose, 
+import {
+  playClick,
+  playFlip,
+  playWin,
+  playLose,
   playTick,
   playBuzzer,
   playNotification,
-  setSoundEffectsEnabled 
+  setSoundEffectsEnabled
 } from '../utils/sounds';
 import { multiplayer, type NetworkPlayer, type NetworkMessage } from '../utils/multiplayer';
 import { containsProfanity, cleanText } from '../utils/profanityFilter';
@@ -135,61 +135,61 @@ interface GameContextType {
   chosenCategory: string;
   randomizeOrder: boolean;
   setRandomizeOrder: (random: boolean) => void;
-  
+
   // Customization settings
   customNames: string[];
   setCustomNames: (names: string[]) => void;
   customAvatars: string[];
   setCustomAvatars: (avatars: string[]) => void;
-  
+
   // Impostor Knows Role Toggle
   impostorKnowsRole: boolean;
   setImpostorKnowsRole: (val: boolean) => void;
-  
+
   // Sound Settings
   soundEnabled: boolean;
   setSoundEnabled: (val: boolean) => void;
-  
+
   // Hints & Visual Aids Toggle Settings
   hintsEnabled: boolean;
   setHintsEnabled: (val: boolean) => void;
-  
+
   clueTimerLimit: number;
   setClueTimerLimit: (limit: number) => void;
-  
+
   // Reveal flow state
   currentRevealIndex: number;
   isWordRevealed: boolean;
   revealWord: () => void;
   hideWord: () => void;
   nextReveal: () => void;
-  
+
   // Voting flow state
   currentVoterIndex: number;
   votes: Record<string, string>; // voterId -> votedId
   submitVote: (votedId: string) => void;
-  
+
   // Results
   winner: 'CREWMATES' | 'IMPOSTOR' | null;
   voteStats: Record<string, number>; // playerId -> count
-  
+
   // Custom Word Pairs
   customWordPairs: WordPair[];
   addCustomWordPair: (common: string, impostor: string) => boolean;
   deleteCustomWordPair: (index: number) => void;
-  
+
   // Game control
   initiateSetup: () => void;
   startGame: () => void;
   restartGame: () => void;
   resetGame: () => void;
-  
+
   // Persistent stats & History
   stats: GameStats;
   clearStats: () => void;
   history: GameHistoryItem[];
   clearHistory: () => void;
-  
+
   // Dynamic Reveal Helpers
   activeWordPairHints: string[];
   activePlayerVisualAid: VisualAid | undefined;
@@ -277,6 +277,13 @@ interface GameContextType {
   speakerVolume: number;
   setSpeakerVolume: (v: number) => void;
   playersSpeaking: Record<string, boolean>;
+  playersVolume: Record<string, number>;
+  micMuted: boolean;
+  toggleMicMute: () => void;
+  deafenAll: boolean;
+  toggleDeafenAll: () => void;
+  deafenedPlayerIds: string[];
+  toggleDeafenPlayer: (playerId: string) => void;
 }
 
 const GameContext = createContext<GameContextType | undefined>(undefined);
@@ -299,23 +306,23 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const palette = PALETTES.find(p => p.id === themePaletteId) || PALETTES[0];
     localStorage.setItem('whoisfake_theme_mode', themeMode);
     localStorage.setItem('whoisfake_theme_palette', themePaletteId);
-    
+
     // Apply CSS variables dynamically
     const root = document.documentElement;
     root.setAttribute('data-mode', themeMode);
-    
+
     const isLight = themeMode === 'light';
     const darkBgColor = isLight ? palette.lightBg : palette.darkBg;
     const cardColor = isLight ? 'rgba(255, 255, 255, 0.75)' : 'rgba(17, 24, 48, 0.55)';
     const borderColor = isLight ? 'rgba(0, 0, 0, 0.08)' : 'rgba(255, 255, 255, 0.08)';
-    
+
     const primaryRgb = hexToRgb(palette.colors.primary);
     const secondaryRgb = hexToRgb(palette.colors.secondary);
-    
+
     const glowOpacity = isLight ? '0.08' : '0.15';
     const glow1 = `rgba(${primaryRgb}, ${glowOpacity})`;
     const glow2 = `rgba(${secondaryRgb}, ${glowOpacity})`;
-    
+
     root.style.setProperty('--color-brand-dark', darkBgColor);
     root.style.setProperty('--color-brand-card', cardColor);
     root.style.setProperty('--color-brand-border', borderColor);
@@ -350,13 +357,13 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return (saved as DifficultyKey) || 'medium';
   });
   const [randomizeOrder, setRandomizeOrder] = useState<boolean>(true);
-  
+
   // Custom Toggles
   const [impostorKnowsRole, setImpostorKnowsRole] = useState<boolean>(() => {
     const saved = localStorage.getItem('impostor_knows_role');
     return saved !== null ? saved === 'true' : true;
   });
-  
+
   const [soundEnabled, setSoundEnabled] = useState<boolean>(() => {
     const saved = localStorage.getItem('impostor_sound_enabled');
     const enabled = saved !== null ? saved === 'true' : true;
@@ -437,20 +444,20 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [commonWord, setCommonWord] = useState<string>('');
   const [impostorWord, setImpostorWord] = useState<string>('');
   const [chosenCategory, setChosenCategory] = useState<string>('');
-  
+
   // Context visual states
   const [commonVisual, setCommonVisual] = useState<VisualAid | undefined>(undefined);
   const [impostorVisual, setImpostorVisual] = useState<VisualAid | undefined>(undefined);
   const [activeWordPairHints, setActiveWordPairHints] = useState<string[]>([]);
-  
+
   // Reveal state
   const [currentRevealIndex, setCurrentRevealIndex] = useState<number>(0);
   const [isWordRevealed, setIsWordRevealed] = useState<boolean>(false);
-  
+
   // Voting state
   const [currentVoterIndex, setCurrentVoterIndex] = useState<number>(0);
   const [votes, setVotes] = useState<Record<string, string>>({});
-  
+
   // Persistent stats & history
   const [stats, setStats] = useState<GameStats>(() => {
     const saved = localStorage.getItem('impostor_game_stats');
@@ -511,7 +518,10 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [lobbyAdminId, setLobbyAdminId] = useState<string>('');
   const isLobbyAdmin = isMultiplayer ? (onlinePlayers.find(p => p.id === myPlayerId)?.isAdmin || false) : true;
   const [mutedPlayerIds, setMutedPlayerIds] = useState<string[]>([]);
-  
+  const [micMuted, setMicMuted] = useState<boolean>(false);
+  const [deafenAll, setDeafenAll] = useState<boolean>(false);
+  const [deafenedPlayerIds, setDeafenedPlayerIds] = useState<string[]>([]); // local per-player deafen
+
   const toggleMutePlayer = (playerId: string) => {
     playClick();
     if (isLobbyAdmin) {
@@ -523,14 +533,48 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
         });
         return next;
       });
-      setMutedPlayerIds(prev => 
+      setMutedPlayerIds(prev =>
         prev.includes(playerId) ? prev.filter(id => id !== playerId) : [...prev, playerId]
       );
     } else {
-      setMutedPlayerIds(prev => 
+      setMutedPlayerIds(prev =>
         prev.includes(playerId) ? prev.filter(id => id !== playerId) : [...prev, playerId]
       );
     }
+  };
+
+  const toggleMicMute = () => {
+    playClick();
+    setMicMuted(prev => {
+      const next = !prev;
+      if (gainNodeRef.current) {
+        gainNodeRef.current.gain.value = next ? 0 : micVolume;
+      }
+      return next;
+    });
+  };
+
+  const toggleDeafenAll = () => {
+    playClick();
+    setDeafenAll(prev => {
+      const next = !prev;
+      Object.values(audioElementsRef.current).forEach(a => {
+        try { a.muted = next; } catch (e) { }
+      });
+      return next;
+    });
+  };
+
+  const toggleDeafenPlayer = (playerId: string) => {
+    playClick();
+    setDeafenedPlayerIds(prev => {
+      const next = prev.includes(playerId) ? prev.filter(id => id !== playerId) : [...prev, playerId];
+      const audio = audioElementsRef.current[playerId];
+      if (audio) {
+        try { audio.muted = next.includes(playerId); } catch (e) { }
+      }
+      return next;
+    });
   };
 
   // Sync lobby settings across multiplayer network if we are the admin
@@ -575,6 +619,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return saved !== null ? parseFloat(saved) : 0.8;
   });
   const [playersSpeaking, setPlayersSpeaking] = useState<Record<string, boolean>>({});
+  const [playersVolume, setPlayersVolume] = useState<Record<string, number>>({});
 
   // Audio Context and Stream Refs
   const localStreamRef = useRef<MediaStream | null>(null);
@@ -764,13 +809,13 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const sendChatMessage = (text: string) => {
     if (!text.trim()) return;
     const cleanedText = cleanText(text.trim());
-    const senderName = isHost 
-      ? (customNames[0] || 'Host') 
+    const senderName = isHost
+      ? (customNames[0] || 'Host')
       : (onlinePlayers.find(p => p.id === myPlayerId)?.name || 'Guest');
-    const senderAvatar = isHost 
-      ? (customAvatars[0] || '🦊') 
+    const senderAvatar = isHost
+      ? (customAvatars[0] || '🦊')
       : (onlinePlayers.find(p => p.id === myPlayerId)?.avatar || '🦊');
-      
+
     const msg: ChatMessage = {
       id: `chat_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
       senderId: myPlayerId,
@@ -779,9 +824,9 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
       text: cleanedText,
       timestamp: Date.now()
     };
-    
+
     const msgWithScope = appendChatMessage(msg);
-    
+
     if (isMultiplayer) {
       multiplayer.send({
         type: 'CHAT',
@@ -797,7 +842,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
         if (kickedPlayer) {
           kickedPlayersRef.current.add(playerId);
           multiplayer.kickPlayer(playerId, reason, false);
-          
+
           const reasonText = reason ? ` (Reason: ${reason})` : '';
           const systemMsg: ChatMessage = {
             id: `sys_${Date.now()}_${Math.random()}`,
@@ -809,7 +854,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
             isSystem: true
           };
           const msgWithScope = appendChatMessage(systemMsg);
-          
+
           multiplayer.send({
             type: 'CHAT',
             message: msgWithScope
@@ -848,7 +893,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
         if (bannedPlayer) {
           kickedPlayersRef.current.add(playerId);
           multiplayer.banPlayer(playerId, reason);
-          
+
           const reasonText = reason ? ` (Reason: ${reason})` : '';
           const systemMsg: ChatMessage = {
             id: `sys_${Date.now()}_${Math.random()}`,
@@ -860,7 +905,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
             isSystem: true
           };
           const msgWithScope = appendChatMessage(systemMsg);
-          
+
           multiplayer.send({
             type: 'CHAT',
             message: msgWithScope
@@ -904,8 +949,8 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (votesArray.length >= requiredVotes && totalPlayers >= 3) {
       const targetPlayer = onlinePlayersRef.current.find(p => p.id === targetId);
       const targetName = targetPlayer?.name || 'Player';
-      
-      const noticeText = action === 'KICK' 
+
+      const noticeText = action === 'KICK'
         ? `Democratic Vote: ${targetName} was kicked from the room (${votesArray.length}/${totalPlayers} votes).`
         : `Democratic Vote: ${targetName} was banned from the room (${votesArray.length}/${totalPlayers} votes).`;
 
@@ -958,7 +1003,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
         });
         return next;
       });
-      
+
       setTimeout(() => {
         multiplayer.send({
           type: 'VOTE_KICK_BAN_SYNC',
@@ -977,7 +1022,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
         ? current.filter(id => id !== voterId)
         : [...current, voterId];
       const next = { ...prev, [targetId]: nextVotes };
-      
+
       multiplayer.send({
         type: 'VOTE_KICK_BAN_SYNC',
         kickVotes: next,
@@ -1000,7 +1045,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
           triggerVoteNotificationLocal('KICK', targetId, target.name, voterId, initiator.name);
         }
       }
-      
+
       checkDemocraticMajority(targetId, nextVotes, 'KICK');
       return next;
     });
@@ -1014,7 +1059,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
         ? current.filter(id => id !== voterId)
         : [...current, voterId];
       const next = { ...prev, [targetId]: nextVotes };
-      
+
       multiplayer.send({
         type: 'VOTE_KICK_BAN_SYNC',
         kickVotes: kickVotesRef.current,
@@ -1037,7 +1082,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
           triggerVoteNotificationLocal('BAN', targetId, target.name, voterId, initiator.name);
         }
       }
-      
+
       checkDemocraticMajority(targetId, nextVotes, 'BAN');
       return next;
     });
@@ -1127,9 +1172,9 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (isHost) {
         const oldPlayer = onlinePlayersRef.current.find(p => p.id === myPlayerIdRef.current);
         const oldName = oldPlayer?.name || 'Host';
-        
+
         if (oldName === trimmed) return;
-        
+
         setOnlinePlayers(prev => {
           const next = prev.map(p => p.id === myPlayerIdRef.current ? { ...p, name: trimmed } : p);
           multiplayer.send({
@@ -1240,13 +1285,13 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }, 1000);
     } else if (timerSeconds === 0 && timerActive && (!isMultiplayer || isHost)) {
       playBuzzer();
-      
+
       const nextIdx = activeClueIndex + 1;
       if (nextIdx < playerOrder.length) {
         // Automatically move to the next speaker and restart the countdown
         setActiveClueIndex(nextIdx);
         setTimerSeconds(clueTimerLimit);
-        
+
         if (isMultiplayer && isHost) {
           multiplayer.send({
             type: 'TIMER_SYNC',
@@ -1259,7 +1304,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
         // Last speaker time is up, transition immediately to Voting
         setTimerActive(false);
         setGameState('VOTING');
-        
+
         if (isMultiplayer && isHost) {
           multiplayer.send({
             type: 'TIMER_SYNC',
@@ -1561,7 +1606,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
             message: 'The room is already in a game. Please wait for the next match to start.',
             confirmText: 'OK',
             cancelText: '',
-            onConfirm: () => {}
+            onConfirm: () => { }
           });
         }
         break;
@@ -1575,7 +1620,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
             : `You have been kicked from the room.${msg.reason ? `\n\nReason: "${msg.reason}"` : ''}`,
           confirmText: 'OK',
           cancelText: '',
-          onConfirm: () => {}
+          onConfirm: () => { }
         });
         break;
 
@@ -1647,7 +1692,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
           title: 'Lobby Ended',
           message: 'The host has left the lobby. The game session has ended.',
           confirmText: 'OK',
-          onConfirm: () => {}
+          onConfirm: () => { }
         });
         break;
     }
@@ -1915,8 +1960,9 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setIsMultiplayer(true);
       setIsHost(true);
       setRoomCode(code);
+      const hostPeerId = multiplayer.myPeerId || `host_${Date.now()}`;
       const hostPlayer: NetworkPlayer = {
-        id: `host_${Date.now()}`,
+        id: hostPeerId,
         name: customNames[0] || 'Host',
         avatar: customAvatars[0] || '🦊',
         isHost: true,
@@ -1956,7 +2002,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 title: 'Disconnected',
                 message: 'Connection to the host was lost or the host closed the room.',
                 confirmText: 'OK',
-                onConfirm: () => {}
+                onConfirm: () => { }
               });
             }
             leaveRoomRef.current();
@@ -2035,7 +2081,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setVoteStats(counts);
 
     const impostorVoteCount = counts[impostorId] || 0;
-    
+
     let isImpostorMostVoted = true;
     for (const [playerId, count] of Object.entries(counts)) {
       if (playerId !== impostorId && count >= impostorVoteCount) {
@@ -2090,19 +2136,19 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
       localStreamRef.current = null;
     }
     if (audioContextRef.current) {
-      audioContextRef.current.close().catch(() => {});
+      audioContextRef.current.close().catch(() => { });
       audioContextRef.current = null;
     }
     gainNodeRef.current = null;
     localDestinationStreamRef.current = null;
 
     Object.values(activeCallsRef.current).forEach((call: any) => {
-      try { call.close(); } catch (e) {}
+      try { call.close(); } catch (e) { }
     });
     activeCallsRef.current = {};
 
     Object.values(audioElementsRef.current).forEach((audio) => {
-      try { audio.pause(); audio.srcObject = null; audio.remove(); } catch (e) {}
+      try { audio.pause(); audio.srcObject = null; audio.remove(); } catch (e) { }
     });
     audioElementsRef.current = {};
 
@@ -2110,10 +2156,22 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
       clearInterval(detector.interval);
     });
     voiceSpeakingDetectorsRef.current = {};
-    
+
     setPlayersSpeaking({});
+    setPlayersVolume({});
     setIsVoiceActive(false);
+    setMicMuted(false);
+    setDeafenAll(false);
   };
+
+  useEffect(() => {
+    Object.entries(audioElementsRef.current).forEach(([id, audio]) => {
+      try {
+        const shouldMute = deafenAll || deafenedPlayerIds.includes(id) || mutedPlayerIds.includes(id);
+        audio.muted = !!shouldMute;
+      } catch (e) { }
+    });
+  }, [deafenAll, deafenedPlayerIds, mutedPlayerIds]);
 
   const handleRemoteCallStream = (call: any, peerId: string) => {
     call.on('stream', (remoteStream: MediaStream) => {
@@ -2125,6 +2183,14 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
       audio.srcObject = remoteStream;
       audio.volume = speakerVolume;
+      // Apply local deafen / moderation mute rules
+      try {
+        const shouldMute = deafenAll || deafenedPlayerIds.includes(peerId) || mutedPlayerIds.includes(peerId);
+        audio.muted = !!shouldMute;
+      } catch (e) { }
+      console.log(`[Voice Chat] ${isHost ? 'Host' : 'Guest'} ${myPlayerId}: Received remote stream from ${peerId}.`);
+      console.log(`[Voice Chat] ${isHost ? 'Host' : 'Guest'} ${myPlayerId}: Received remote stream from ${peerId}.`);
+      console.log(`[Voice Chat] ${isHost ? 'Host' : 'Guest'} ${myPlayerId}: Received remote stream from ${peerId}.`);
       audio.play().catch((e: any) => console.warn("Audio autoplay blocked or failed:", e));
 
       if (voiceSpeakingDetectorsRef.current[peerId]) {
@@ -2155,6 +2221,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
             if (prev[peerId] === isSpeakingNow) return prev;
             return { ...prev, [peerId]: isSpeakingNow };
           });
+          setPlayersVolume(prev => ({ ...prev, [peerId]: rms }));
         }, 150);
 
         voiceSpeakingDetectorsRef.current[peerId] = {
@@ -2176,13 +2243,14 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const cleanupRemotePeerCall = (peerId: string) => {
+    console.log(`[Voice Chat] ${isHost ? 'Host' : 'Guest'} ${myPlayerId}: Cleaning up remote peer call for ${peerId}.`);
     if (activeCallsRef.current[peerId]) {
-      try { activeCallsRef.current[peerId].close(); } catch (e) {}
+      try { activeCallsRef.current[peerId].close(); } catch (e) { }
       delete activeCallsRef.current[peerId];
     }
     const audio = audioElementsRef.current[peerId];
     if (audio) {
-      try { audio.pause(); audio.srcObject = null; audio.remove(); } catch (e) {}
+      try { audio.pause(); audio.srcObject = null; audio.remove(); } catch (e) { }
       delete audioElementsRef.current[peerId];
     }
     const detector = voiceSpeakingDetectorsRef.current[peerId];
@@ -2196,10 +2264,17 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
       delete next[peerId];
       return next;
     });
+    setPlayersVolume(prev => {
+      if (prev[peerId] === undefined) return prev;
+      const next = { ...prev };
+      delete next[peerId];
+      return next;
+    });
   };
 
   const toggleVoice = async () => {
     if (isVoiceActive) {
+      console.log(`[Voice Chat] ${isHost ? 'Host' : 'Guest'} ${myPlayerId}: Deactivating voice.`);
       cleanupVoice();
       if (isMultiplayer) {
         multiplayer.send({
@@ -2220,14 +2295,14 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
     } else {
       try {
         const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
-        
+
         const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
         const ctx = new AudioContextClass();
         const source = ctx.createMediaStreamSource(stream);
         const gainNode = ctx.createGain();
         gainNode.gain.value = micVolume;
         const dest = ctx.createMediaStreamDestination();
-        
+
         source.connect(gainNode);
         gainNode.connect(dest);
 
@@ -2235,8 +2310,9 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
         audioContextRef.current = ctx;
         gainNodeRef.current = gainNode;
         localDestinationStreamRef.current = dest.stream;
-        
+
         setIsVoiceActive(true);
+        console.log(`[Voice Chat] ${isHost ? 'Host' : 'Guest'} ${myPlayerId}: Activated voice.`);
 
         if (isMultiplayer) {
           multiplayer.send({
@@ -2260,7 +2336,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
           title: 'Microphone Access Denied',
           message: 'Unable to access your microphone. Please check your browser permissions for this site and try again.',
           confirmText: 'OK',
-          onConfirm: () => {}
+          onConfirm: () => { }
         });
       }
     }
@@ -2272,20 +2348,24 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (!peer) return;
 
     const handleCall = (call: any) => {
+      console.log(`[Voice Chat] ${isHost ? 'Host' : 'Guest'} ${myPlayerId}: Incoming call from ${call.peer}. isVoiceActive: ${isVoiceActive}, localDestinationStreamRef.current: ${!!localDestinationStreamRef.current}`);
       if (!isVoiceActive || !localDestinationStreamRef.current) {
         try {
           const emptyCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
           const emptyDest = emptyCtx.createMediaStreamDestination();
           call.answer(emptyDest.stream);
           setTimeout(() => call.close(), 100);
+          console.log(`[Voice Chat] ${isHost ? 'Host' : 'Guest'} ${myPlayerId}: Answered incoming call from ${call.peer} with empty stream (voice not active or no local stream).`);
         } catch (e) {
           call.answer();
+          console.error(`[Voice Chat] ${isHost ? 'Host' : 'Guest'} ${myPlayerId}: Error answering with empty stream:`, e);
         }
         return;
       }
 
       call.answer(localDestinationStreamRef.current);
       activeCallsRef.current[call.peer] = call;
+      console.log(`[Voice Chat] ${isHost ? 'Host' : 'Guest'} ${myPlayerId}: Answered incoming call from ${call.peer} with local stream.`);
       handleRemoteCallStream(call, call.peer);
     };
 
@@ -2323,7 +2403,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
     Object.keys(activeCallsRef.current).forEach(peerId => {
       const p = onlinePlayers.find(pl => pl.id === peerId);
       const targetScope = getPlayerVoiceScope(peerId);
-      
+
       const shouldDisconnect = !p || !p.isVoiceActive || targetScope !== myScope;
       if (shouldDisconnect) {
         cleanupRemotePeerCall(peerId);
@@ -2339,11 +2419,12 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
         if (targetScope === myScope && myPlayerId < p.id) {
           if (!activeCallsRef.current[p.id]) {
             try {
+              console.log(`[Voice Chat] ${isHost ? 'Host' : 'Guest'} ${myPlayerId}: Initiating call to peer ${p.id}.`);
               const call = peer.call(p.id, localDestinationStreamRef.current!);
               activeCallsRef.current[p.id] = call;
               handleRemoteCallStream(call, p.id);
             } catch (err) {
-              console.warn("Failed to call peer " + p.id, err);
+              console.error(`[Voice Chat] ${isHost ? 'Host' : 'Guest'} ${myPlayerId}: Failed to call peer ${p.id}:`, err);
             }
           }
         }
@@ -2401,7 +2482,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const addCustomWordPair = (common: string, impostor: string): boolean => {
     playClick();
     if (!common.trim() || !impostor.trim()) return false;
-    
+
     // Auto-generate some simple hints based on the custom category tag
     const newPair: WordPair = {
       common: common.trim(),
@@ -2411,7 +2492,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
       impostorVisual: { emojis: '🎨📝🛡️', description: `User-created custom word: "${impostor.trim()}".` },
       difficulty: 'medium'
     };
-    
+
     setCustomWordPairs(prev => [newPair, ...prev]);
     return true;
   };
@@ -2440,7 +2521,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
             title: 'Inappropriate Name Detected',
             message: `Player ${i + 1}'s name contains vulgar language. Please use a clean name before starting.`,
             confirmText: 'OK',
-            onConfirm: () => {}
+            onConfirm: () => { }
           });
           return;
         }
@@ -2461,7 +2542,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
     // 2. Prepare players
     const gamePlayers: Player[] = [];
     const ids: string[] = [];
-    
+
     if (isMultiplayer) {
       // Choose random impostor index from connected online players
       const impostorIndex = Math.floor(Math.random() * onlinePlayers.length);
@@ -2471,7 +2552,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
         const op = onlinePlayers[i];
         const id = op.id;
         ids.push(id);
-        
+
         const isImpostor = i === impostorIndex;
         if (isImpostor) {
           chosenImpostorId = id;
@@ -2508,7 +2589,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
       onlinePlayers.forEach((op) => {
         const gp = gamePlayers.find((p) => p.id === op.id)!;
         const visualAid = gp.role === 'IMPOSTOR' ? pair.impostorVisual : pair.commonVisual;
-        
+
         if (op.id !== myPlayerId) {
           multiplayer.sendTo(op.id, {
             type: 'START_GAME',
@@ -2534,11 +2615,11 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
       for (let i = 0; i < playerCount; i++) {
         const id = `player_${Date.now()}_${i}`;
         ids.push(id);
-        
+
         const name = customNames[i]?.trim() || `Player ${i + 1}`;
         const avatar = customAvatars[i] || '🦊';
         const isImpostor = i === impostorIndex;
-        
+
         if (isImpostor) {
           chosenImpostorId = id;
         }
@@ -2573,7 +2654,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
     playFlip();
     setIsWordRevealed(true);
   };
-  
+
   const hideWord = () => {
     playFlip();
     setIsWordRevealed(false);
@@ -2675,7 +2756,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
     // Determine if crewmates win:
     // Impostor must receive strictly the most votes.
     const impostorVoteCount = counts[impostorId] || 0;
-    
+
     let isImpostorMostVoted = true;
     for (const [playerId, count] of Object.entries(counts)) {
       if (playerId !== impostorId && count >= impostorVoteCount) {
@@ -2929,6 +3010,13 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
         speakerVolume,
         setSpeakerVolume,
         playersSpeaking,
+        playersVolume,
+        micMuted,
+        toggleMicMute,
+        deafenAll,
+        toggleDeafenAll,
+        deafenedPlayerIds,
+        toggleDeafenPlayer,
       }}
     >
       {children}
@@ -2943,4 +3031,4 @@ export const useGame = () => {
   }
   return context;
 };
-export {};
+export { };

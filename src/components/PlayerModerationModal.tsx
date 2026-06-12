@@ -1,7 +1,7 @@
 import React from 'react';
 import { useGame } from '../context/GameContext';
 import { Button } from './Button';
-import { X, ShieldAlert, UserMinus, VolumeX, Volume2, Shield } from 'lucide-react';
+import { X, ShieldAlert, UserMinus, VolumeX, Volume2, Shield, MicOff, Headphones } from 'lucide-react';
 import { playClick } from '../utils/sounds';
 
 interface PlayerModerationModalProps {
@@ -30,6 +30,7 @@ export const PlayerModerationModal: React.FC<PlayerModerationModalProps> = ({
     voteToKickPlayer,
     voteToBanPlayer,
     lobbyAdminId,
+    micMuted, toggleMicMute, deafenAll, toggleDeafenAll, deafenedPlayerIds, toggleDeafenPlayer
   } = useGame();
 
   const isMe = playerId === myPlayerId;
@@ -74,6 +75,45 @@ export const PlayerModerationModal: React.FC<PlayerModerationModalProps> = ({
         </div>
 
         {/* Profile Details */}
+          {isMe && (
+            <div className="flex flex-col gap-2.5 mt-2">
+              <Button
+                variant="glass"
+                onClick={() => toggleMicMute()}
+                className="w-full py-3 rounded-xl text-xs font-bold flex items-center justify-center gap-2 border border-white/10 hover:bg-white/10"
+              >
+                {micMuted ? (
+                  <>
+                    <MicOff className="w-4 h-4 text-brand-warning" />
+                    Unmute Microphone
+                  </>
+                ) : (
+                  <>
+                    <MicOff className="w-4 h-4 text-slate-300" />
+                    Mute Microphone
+                  </>
+                )}
+              </Button>
+
+              <Button
+                variant="glass"
+                onClick={() => toggleDeafenAll()}
+                className="w-full py-3 rounded-xl text-xs font-bold flex items-center justify-center gap-2 border border-white/10 hover:bg-white/10"
+              >
+                {deafenAll ? (
+                  <>
+                    <Headphones className="w-4 h-4 text-brand-accent animate-pulse" />
+                    Undeafen
+                  </>
+                ) : (
+                  <>
+                    <Headphones className="w-4 h-4 text-slate-300" />
+                    Deafen All
+                  </>
+                )}
+              </Button>
+            </div>
+          )}
         <h3 className="text-xl font-black text-white tracking-wide text-center">
           {playerName}
         </h3>
