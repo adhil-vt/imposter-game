@@ -49,7 +49,9 @@ import {
   Shield,
   MoreVertical,
   X,
-  Mic
+  Mic,
+  MicOff,
+  Radio
 } from 'lucide-react';
 
 export const CreateGamePage: React.FC = () => {
@@ -103,6 +105,12 @@ export const CreateGamePage: React.FC = () => {
     toggleMutePlayer,
     transferHost,
     playersSpeaking,
+    isVoiceActive,
+    toggleVoice,
+    micVolume,
+    setMicVolume,
+    speakerVolume,
+    setSpeakerVolume,
   } = useGame();
 
   const [copied, setCopied] = useState(false);
@@ -123,6 +131,7 @@ export const CreateGamePage: React.FC = () => {
     setCustomInputVal(String(clueTimerLimit));
   }, [clueTimerLimit]);
   const [chatInput, setChatInput] = useState('');
+  const [activeTab, setActiveTab] = useState<'chat' | 'voice'>('chat');
   const [isEditingName, setIsEditingName] = useState(false);
   const [editingNameVal, setEditingNameVal] = useState('');
   const chatContainerRef = useRef<HTMLDivElement>(null);
@@ -525,111 +534,278 @@ export const CreateGamePage: React.FC = () => {
   );
 
   const lobbyChatCard = (
-    <Card id="lobby-chat" className="p-5 border-white/5 bg-brand-card/45 flex flex-col h-[320px] justify-between">
-      {/* Header */}
-      <div className="border-b border-white/5 pb-2.5 flex justify-between items-center select-none">
-        <span className="text-xs font-bold text-slate-400 tracking-wider uppercase flex items-center gap-2">
-          <MessageSquare className="w-4 h-4 text-brand-secondary" />
-          Room Chat
-        </span>
+    <Card id="lobby-chat" className="p-5 border-white/5 bg-brand-card/45 flex flex-col h-[350px] justify-between">
+      {/* Header Tabs */}
+      <div className="flex border-b border-white/5 bg-brand-dark/10 select-none -mx-5 -mt-5 rounded-t-2xl overflow-hidden shrink-0">
+        <button
+          type="button"
+          onClick={() => { playClick(); setActiveTab('chat'); }}
+          className={`flex-1 py-2.5 text-xs font-bold flex items-center justify-center gap-1.5 border-b-2 transition-all cursor-pointer ${
+            activeTab === 'chat'
+              ? 'border-brand-primary text-white bg-white/[0.02]'
+              : 'border-transparent text-slate-500 hover:text-slate-300'
+          }`}
+        >
+          <MessageSquare className="w-3.5 h-3.5 text-brand-secondary" />
+          Text Chat
+        </button>
+        <button
+          type="button"
+          onClick={() => { playClick(); setActiveTab('voice'); }}
+          className={`flex-1 py-2.5 text-xs font-bold flex items-center justify-center gap-1.5 border-b-2 transition-all cursor-pointer ${
+            activeTab === 'voice'
+              ? 'border-brand-primary text-white bg-white/[0.02]'
+              : 'border-transparent text-slate-500 hover:text-slate-300'
+          }`}
+        >
+          <Radio className="w-3.5 h-3.5 text-brand-primary" />
+          Voice Chat
+          {isVoiceActive && (
+            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse shadow-[0_0_6px_rgba(52,211,153,0.5)]" />
+          )}
+        </button>
       </div>
 
-      {/* Messages list */}
-      <div ref={chatContainerRef} className="flex-1 overflow-y-auto py-3 pr-1 flex flex-col gap-3 custom-scrollbar max-h-[190px]">
-        {chatMessages.length === 0 ? (
-          <div className="flex-1 flex flex-col items-center justify-center text-center opacity-40 p-4 select-none h-full">
-            <MessageSquare className="w-8 h-8 text-slate-500 mb-2 stroke-[1.5]" />
-            <span className="text-xs font-bold text-slate-400">No messages yet</span>
-            <span className="text-[10px] text-slate-500 mt-0.5">Start typing to talk with other players!</span>
-          </div>
-        ) : (
-          chatMessages
-            .filter(msg => !mutedPlayerIds.includes(msg.senderId) && (!msg.chatScope || msg.chatScope === 'lobby'))
-            .map((msg) => {
-              if (msg.isSystem) {
-                return (
-                  <div
-                    key={msg.id}
-                    className="self-center bg-white/[0.02] border border-dashed border-white/10 rounded-xl px-3.5 py-1.5 text-[9px] text-slate-500 font-extrabold max-w-[85%] text-center animate-fade-in-up"
-                  >
-                    {msg.text}
-                  </div>
-                );
-              }
+      {activeTab === 'chat' ? (
+        <>
+          {/* Messages list */}
+          <div ref={chatContainerRef} className="flex-1 overflow-y-auto py-3 pr-1 flex flex-col gap-3 custom-scrollbar">
+            {chatMessages.length === 0 ? (
+              <div className="flex-1 flex flex-col items-center justify-center text-center opacity-40 p-4 select-none h-full">
+                <MessageSquare className="w-8 h-8 text-slate-500 mb-2 stroke-[1.5]" />
+                <span className="text-xs font-bold text-slate-400">No messages yet</span>
+                <span className="text-[10px] text-slate-500 mt-0.5">Start typing to talk with other players!</span>
+              </div>
+            ) : (
+              chatMessages
+                .filter(msg => !mutedPlayerIds.includes(msg.senderId) && (!msg.chatScope || msg.chatScope === 'lobby'))
+                .map((msg) => {
+                  if (msg.isSystem) {
+                    return (
+                      <div
+                        key={msg.id}
+                        className="self-center bg-white/[0.02] border border-dashed border-white/10 rounded-xl px-3.5 py-1.5 text-[9px] text-slate-500 font-extrabold max-w-[85%] text-center animate-fade-in-up"
+                      >
+                        {msg.text}
+                      </div>
+                    );
+                  }
 
-              const isMe = msg.senderId === myPlayerId;
-              const formatTime = (ts: number) => {
-                return new Date(ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-              };
+                  const isMe = msg.senderId === myPlayerId;
+                  const formatTime = (ts: number) => {
+                    return new Date(ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                  };
 
-              return (
-                <div
-                  key={msg.id}
-                  className={`flex gap-2 max-w-[85%] animate-fade-in-up ${
-                    isMe ? 'self-end flex-row-reverse' : 'self-start'
-                  }`}
-                >
-                  <span className="w-7 h-7 rounded-lg bg-white/5 border border-white/10 flex items-center justify-center text-sm shadow-sm select-none shrink-0 self-end">
-                    {renderAvatarIcon(msg.senderAvatar)}
-                  </span>
-                  <div className={`flex flex-col min-w-0 ${isMe ? 'items-end' : 'items-start'}`}>
-                    <div className="flex items-center gap-1 text-[8px] text-slate-500 font-extrabold mb-0.5 select-none">
-                      <span>{msg.senderName}</span>
-                      <span>&bull;</span>
-                      <span>{formatTime(msg.timestamp)}</span>
-                    </div>
+                  return (
                     <div
-                      className={`px-3 py-2 rounded-xl text-xs break-words shadow-sm font-semibold select-text ${
-                        isMe
-                          ? 'bg-gradient-to-tr from-brand-secondary/80 to-brand-secondary border border-brand-secondary/20 text-white rounded-br-none'
-                          : 'bg-white/5 border border-white/10 text-slate-200 rounded-bl-none'
+                      key={msg.id}
+                      className={`flex gap-2 max-w-[85%] animate-fade-in-up ${
+                        isMe ? 'self-end flex-row-reverse' : 'self-start'
                       }`}
                     >
-                      {msg.text}
+                      <span className="w-7 h-7 rounded-lg bg-white/5 border border-white/10 flex items-center justify-center text-sm shadow-sm select-none shrink-0 self-end">
+                        {renderAvatarIcon(msg.senderAvatar)}
+                      </span>
+                      <div className={`flex flex-col min-w-0 ${isMe ? 'items-end' : 'items-start'}`}>
+                        <div className="flex items-center gap-1 text-[8px] text-slate-500 font-extrabold mb-0.5 select-none">
+                          <span>{msg.senderName}</span>
+                          <span>&bull;</span>
+                          <span>{formatTime(msg.timestamp)}</span>
+                        </div>
+                        <div
+                          className={`px-3 py-2 rounded-xl text-xs break-words shadow-sm font-semibold select-text ${
+                            isMe
+                              ? 'bg-gradient-to-tr from-brand-secondary/80 to-brand-secondary border border-brand-secondary/20 text-white rounded-br-none'
+                              : 'bg-white/5 border border-white/10 text-slate-200 rounded-bl-none'
+                          }`}
+                        >
+                          {msg.text}
+                        </div>
+                      </div>
                     </div>
-                  </div>
-                </div>
-              );
-            })
-        )}
-        {/* Auto scrolled */}
-      </div>
+                  );
+                })
+            )}
+          </div>
 
-      {/* Form */}
-      {(() => {
-        const myOnlinePlayer = onlinePlayers.find(p => p.id === myPlayerId);
-        const isRestricted = myOnlinePlayer?.isMuted || false;
-        return (
-          <form
-            onSubmit={(e) => {
-              e.preventDefault();
-              if (!chatInput.trim() || isRestricted) return;
-              playClick();
-              sendChatMessage(chatInput);
-              setChatInput('');
-            }}
-            className="border-t border-white/5 pt-3 flex items-center gap-2 select-none"
-          >
-            <input
-              type="text"
-              maxLength={60}
-              value={chatInput}
-              onChange={(e) => setChatInput(e.target.value)}
-              disabled={isRestricted}
-              placeholder={isRestricted ? "You are restricted from chatting by host" : "Type a message... (max 60 chars)"}
-              className="flex-1 bg-white/5 border border-white/10 rounded-xl px-4 py-2 text-xs font-bold text-slate-200 focus:outline-none focus:border-brand-secondary placeholder-slate-600 disabled:opacity-50 disabled:pointer-events-none"
-            />
+          {/* Form */}
+          {(() => {
+            const myOnlinePlayer = onlinePlayers.find(p => p.id === myPlayerId);
+            const isRestricted = myOnlinePlayer?.isMuted || false;
+            return (
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  if (!chatInput.trim() || isRestricted) return;
+                  playClick();
+                  sendChatMessage(chatInput);
+                  setChatInput('');
+                }}
+                className="border-t border-white/5 pt-3 flex items-center gap-2 select-none"
+              >
+                <input
+                  type="text"
+                  maxLength={60}
+                  value={chatInput}
+                  onChange={(e) => setChatInput(e.target.value)}
+                  disabled={isRestricted}
+                  placeholder={isRestricted ? "You are restricted from chatting by host" : "Type a message... (max 60 chars)"}
+                  className="flex-1 bg-white/5 border border-white/10 rounded-xl px-4 py-2 text-xs font-bold text-slate-200 focus:outline-none focus:border-brand-secondary placeholder-slate-600 disabled:opacity-50 disabled:pointer-events-none"
+                />
+                <button
+                  type="submit"
+                  disabled={!chatInput.trim() || isRestricted}
+                  className="p-2 rounded-xl bg-brand-secondary border border-brand-secondary text-white hover:scale-105 active:scale-95 disabled:opacity-40 disabled:pointer-events-none transition-all shadow-md shadow-brand-secondary/10 flex items-center justify-center cursor-pointer"
+                  title="Send Message"
+                >
+                  <Send className="w-3.5 h-3.5" />
+                </button>
+              </form>
+            );
+          })()}
+        </>
+      ) : (
+        /* Voice Panel */
+        <div className="flex-1 flex flex-col min-h-0 overflow-y-auto pt-4 gap-4 custom-scrollbar">
+          {/* Join/Leave Button */}
+          <div className="flex flex-col gap-1.5 shrink-0">
+            <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest block select-none">
+              Voice Channel Status
+            </span>
             <button
-              type="submit"
-              disabled={!chatInput.trim() || isRestricted}
-              className="p-2 rounded-xl bg-brand-secondary border border-brand-secondary text-white hover:scale-105 active:scale-95 disabled:opacity-40 disabled:pointer-events-none transition-all shadow-md shadow-brand-secondary/10 flex items-center justify-center cursor-pointer"
-              title="Send Message"
+              type="button"
+              onClick={() => toggleVoice()}
+              className={`w-full py-2.5 rounded-xl text-xs font-extrabold flex items-center justify-center gap-2 cursor-pointer shadow-md transition-all active:scale-98 ${
+                isVoiceActive
+                  ? 'bg-rose-500/10 border border-rose-500/30 text-rose-400 hover:bg-rose-500/20 hover:border-rose-500/40 shadow-rose-500/5'
+                  : 'bg-brand-primary border border-brand-primary text-white hover:scale-[1.01] shadow-brand-primary/10'
+              }`}
             >
-              <Send className="w-3.5 h-3.5" />
+              {isVoiceActive ? (
+                <>
+                  <MicOff className="w-3.5 h-3.5" />
+                  Disconnect Voice Chat
+                </>
+              ) : (
+                <>
+                  <Mic className="w-3.5 h-3.5 animate-pulse" />
+                  Connect Voice Chat
+                </>
+              )}
             </button>
-          </form>
-        );
-      })()}
+          </div>
+
+          {isVoiceActive ? (
+            <>
+              {/* Sliders Container */}
+              <div className="flex flex-col gap-3 bg-white/[0.01] border border-white/5 p-3 rounded-xl shrink-0">
+                {/* Microphone Gain slider */}
+                <div className="flex flex-col gap-1">
+                  <div className="flex items-center justify-between text-[11px] select-none">
+                    <span className="font-bold text-slate-300 flex items-center gap-1.5">
+                      <Mic className="w-3 h-3 text-brand-primary" />
+                      Microphone Gain
+                    </span>
+                    <span className="font-extrabold text-[10px] text-slate-500">
+                      {Math.round(micVolume * 100)}%
+                    </span>
+                  </div>
+                  <input
+                    type="range"
+                    min="0"
+                    max="1.5"
+                    step="0.05"
+                    value={micVolume}
+                    onChange={(e) => setMicVolume(parseFloat(e.target.value))}
+                    className="w-full accent-brand-primary bg-white/5 h-1.5 rounded-lg appearance-none cursor-pointer"
+                  />
+                </div>
+
+                {/* Speaker Volume slider */}
+                <div className="flex flex-col gap-1">
+                  <div className="flex items-center justify-between text-[11px] select-none">
+                    <span className="font-bold text-slate-300 flex items-center gap-1.5">
+                      <Volume2 className="w-3 h-3 text-brand-secondary" />
+                      Speaker Volume
+                    </span>
+                    <span className="font-extrabold text-[10px] text-slate-500">
+                      {Math.round(speakerVolume * 100)}%
+                    </span>
+                  </div>
+                  <input
+                    type="range"
+                    min="0"
+                    max="1"
+                    step="0.05"
+                    value={speakerVolume}
+                    onChange={(e) => setSpeakerVolume(parseFloat(e.target.value))}
+                    className="w-full accent-brand-secondary bg-white/5 h-1.5 rounded-lg appearance-none cursor-pointer"
+                  />
+                </div>
+              </div>
+
+              {/* Active Participants List */}
+              <div className="flex flex-col gap-1.5 min-h-0 flex-1">
+                <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest block select-none">
+                  Active in Channel
+                </span>
+                <div className="flex flex-col gap-1.5 overflow-y-auto pr-1 flex-1 max-h-[85px] custom-scrollbar">
+                  {onlinePlayers.map((player) => {
+                    const isMe = player.id === myPlayerId;
+                    const isSpeaking = isMe ? false : !!playersSpeaking[player.id];
+
+                    return (
+                      <div
+                        key={player.id}
+                        className="flex items-center justify-between p-2 rounded-xl bg-white/[0.01] border border-white/5 select-none"
+                      >
+                        <div className="flex items-center gap-2 min-w-0">
+                          <div className={`relative transition-shadow duration-300 w-6 h-6 rounded-lg bg-white/5 border border-white/10 flex items-center justify-center text-xs shrink-0 ${
+                            isSpeaking ? 'ring-2 ring-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.3)] animate-pulse' : ''
+                          }`}>
+                            {player.avatar}
+                          </div>
+                          <span className="text-[11px] font-bold text-slate-200 truncate">
+                            {player.name}
+                            {isMe && <span className="text-[9px] text-slate-500 font-bold ml-1 italic">(You)</span>}
+                          </span>
+                        </div>
+
+                        <div className="flex items-center gap-1.5">
+                          {player.isVoiceActive ? (
+                            isSpeaking ? (
+                              <span className="text-[8px] bg-emerald-400/10 border border-emerald-500/25 text-emerald-400 px-1.5 py-0.5 rounded font-black uppercase tracking-wider flex items-center gap-0.5 animate-pulse">
+                                <Radio className="w-2 h-2 shrink-0" />
+                                Speaking
+                              </span>
+                            ) : (
+                              <span className="text-[8px] bg-white/5 border border-white/10 text-slate-400 px-1.5 py-0.5 rounded font-black uppercase tracking-wider flex items-center gap-0.5">
+                                <Mic className="w-2 h-2 shrink-0 text-slate-500" />
+                                Active
+                              </span>
+                            )
+                          ) : (
+                            <span className="text-[8px] bg-white/[0.01] border border-dashed border-white/5 text-slate-600 px-1.5 py-0.5 rounded font-bold uppercase tracking-wider flex items-center gap-0.5">
+                              <MicOff className="w-2 h-2 shrink-0 text-slate-700" />
+                              Offline
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            </>
+          ) : (
+            <div className="flex-1 flex flex-col items-center justify-center text-center opacity-40 p-4 select-none">
+              <Radio className="w-8 h-8 text-slate-500 mb-2 stroke-[1.5] animate-pulse" />
+              <span className="text-xs font-bold text-slate-400">Voice is Disconnected</span>
+              <span className="text-[10px] text-slate-500 mt-0.5">Connect to speak with players in real-time!</span>
+            </div>
+          )}
+        </div>
+      )}
     </Card>
   );
 
