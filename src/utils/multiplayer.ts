@@ -1,5 +1,17 @@
 import { Peer, type DataConnection } from 'peerjs';
 
+export const getDeviceId = (): string => {
+  if (typeof window === 'undefined' || !window.localStorage) {
+    return '';
+  }
+  let id = localStorage.getItem('imposter_device_id');
+  if (!id) {
+    id = 'dev_' + Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
+    localStorage.setItem('imposter_device_id', id);
+  }
+  return id;
+};
+
 export interface NetworkPlayer {
   id: string;
   name: string;
@@ -7,12 +19,14 @@ export interface NetworkPlayer {
   isHost?: boolean;
   isAdmin?: boolean;
   isMuted?: boolean;
+  isVoiceActive?: boolean;
+  isSpectating?: boolean;
 }
 
 export type NetworkMessage =
-  | { type: 'JOIN'; name: string; avatar: string; playerId: string }
+  | { type: 'JOIN'; name: string; avatar: string; playerId: string; deviceId?: string }
   | { type: 'LOBBY_UPDATE'; players: NetworkPlayer[] }
-  | { type: 'START_GAME'; myPlayerId: string; players: any[]; playerOrder: string[]; commonWord: string; impostorWord: string; chosenCategory: string; activeWordPairHints: string[]; activePlayerVisualAid: any }
+  | { type: 'START_GAME'; myPlayerId: string; players: any[]; playerOrder: string[]; commonWord: string; impostorWord: string; chosenCategory: string; activeWordPairHints: string[]; activePlayerVisualAid: any; gameStartedAt?: number }
   | { type: 'REVEAL_COMPLETE'; playerId: string }
   | { type: 'REVEAL_PROGRESS'; revealedPlayers: string[] }
   | { type: 'TIMER_SYNC'; activeClueIndex: number; timerSeconds: number; timerActive: boolean }
@@ -20,10 +34,12 @@ export type NetworkMessage =
   | { type: 'GAME_OVER'; winner: 'CREWMATES' | 'IMPOSTOR'; voteStats: Record<string, number>; votes: Record<string, string>; impostorId: string }
   | { type: 'PLAY_AGAIN' }
   | { type: 'STATE_CHANGE'; state: string }
-  | { type: 'KICKED' }
+  | { type: 'KICKED'; reason?: string; isBan?: boolean }
+  | { type: 'VOTE_INITIATED'; targetId: string; targetName: string; voteType: 'KICK' | 'BAN'; initiatorName: string; initiatorId: string }
+  | { type: 'GAME_PLAYERS_UPDATE'; players: any[]; playerOrder: string[] }
   | { type: 'CHAT'; message: any }
   | { type: 'ROOM_NOTICE'; text: string }
-  | { type: 'SETTINGS_UPDATE'; difficulty: any; selectedCategories: any[]; impostorKnowsRole: boolean; randomizeOrder: boolean; hintsEnabled: boolean }
+  | { type: 'SETTINGS_UPDATE'; difficulty: any; selectedCategories: any[]; impostorKnowsRole: boolean; randomizeOrder: boolean; hintsEnabled: boolean; clueTimerLimit: number }
   | { type: 'TRANSFER_HOST'; newAdminId: string }
   | { type: 'KICK_REQUEST'; targetId: string }
   | { type: 'BAN_REQUEST'; targetId: string }
@@ -33,7 +49,39 @@ export type NetworkMessage =
   | { type: 'PLAYER_READY'; playerId: string; isReady: boolean }
   | { type: 'READY_STATUS_UPDATE'; readyPlayers: string[] }
   | { type: 'LEAVE'; playerId: string }
-  | { type: 'HOST_LEFT' };
+  | { type: 'HOST_LEFT' }
+  | { type: 'PING'; timestamp: number }
+  | { type: 'PONG'; timestamp: number }
+  | { type: 'PING_UPDATE'; pings: Record<string, number> }
+  | { type: 'VOTE_KICK_REQUEST'; targetId: string; voterId: string }
+  | { type: 'VOTE_BAN_REQUEST'; targetId: string; voterId: string }
+  | { type: 'VOTE_KICK_BAN_SYNC'; kickVotes: Record<string, string[]>; banVotes: Record<string, string[]> }
+  | { type: 'GAME_IN_PROGRESS'; isStarted: boolean; currentGameState: string }
+  | { type: 'VOICE_TOGGLE'; active: boolean };
+
+const ICE_SERVERS = [
+  { urls: 'stun:stun.l.google.com:19302' },
+  { urls: 'stun:stun1.l.google.com:19302' },
+  { urls: 'stun:stun2.l.google.com:19302' },
+  { urls: 'stun:stun3.l.google.com:19302' },
+  { urls: 'stun:stun4.l.google.com:19302' },
+  { urls: 'stun:global.stun.twilio.com:3478' },
+  {
+    urls: 'turn:openrelay.metered.ca:80',
+    username: 'openrelayproject',
+    credential: 'openrelayproject'
+  },
+  {
+    urls: 'turn:openrelay.metered.ca:443',
+    username: 'openrelayproject',
+    credential: 'openrelayproject'
+  },
+  {
+    urls: 'turn:openrelay.metered.ca:443?transport=tcp',
+    username: 'openrelayproject',
+    credential: 'openrelayproject'
+  }
+];
 
 class MultiplayerService {
   private peer: Peer | null = null;
@@ -41,44 +89,119 @@ class MultiplayerService {
   private pendingMessages: Record<string, NetworkMessage[]> = {};
   private onMessageCallback: ((senderId: string, msg: NetworkMessage) => void) | null = null;
   private bannedIds: Set<string> = new Set();
+  private bannedDeviceIds: Map<string, string> = new Map();
+  private peerToDeviceMap: Map<string, string> = new Map();
 
   public isHost: boolean = false;
   public roomCode: string = '';
   public myPeerId: string = '';
+
+  public getPeer(): Peer | null {
+    return this.peer;
+  }
+
+  public playerPings: Record<string, number> = {};
+  private onPingCallback: ((pings: Record<string, number>) => void) | null = null;
+  private pingIntervalId: any = null;
 
   // Generate a random 5-digit numeric string for easy lobby entry
   private generateRoomCode(): string {
     return Math.floor(10000 + Math.random() * 90000).toString();
   }
 
+  public registerPingCallback(cb: ((pings: Record<string, number>) => void) | null) {
+    this.onPingCallback = cb;
+  }
+
+  public startPingInterval() {
+    if (this.pingIntervalId) return;
+
+    this.pingIntervalId = setInterval(() => {
+      const now = Date.now();
+      if (this.isHost) {
+        Object.entries(this.connections).forEach(([, conn]) => {
+          if (conn.open) {
+            conn.send({ type: 'PING', timestamp: now });
+          }
+        });
+      } else {
+        const hostPeerId = `imposter-${this.roomCode}`;
+        const conn = this.connections[hostPeerId];
+        if (conn && conn.open) {
+          conn.send({ type: 'PING', timestamp: now });
+        }
+      }
+    }, 3000);
+  }
+
+  public stopPingInterval() {
+    if (this.pingIntervalId) {
+      clearInterval(this.pingIntervalId);
+      this.pingIntervalId = null;
+    }
+    this.playerPings = {};
+    this.onPingCallback?.({});
+  }
+
+  private sendPingUpdate() {
+    this.send({
+      type: 'PING_UPDATE',
+      pings: this.playerPings
+    });
+  }
+
   public initHost(
     onMessage: (senderId: string, msg: NetworkMessage) => void,
     onStatusChange: (status: 'connected' | 'disconnected' | 'error', detail?: string) => void,
     onPlayerJoined: (player: NetworkPlayer) => void,
-    onPlayerDisconnected: (playerId: string) => void
+    onPlayerDisconnected: (playerId: string) => void,
+    retryCount = 0
   ): Promise<string> {
     this.isHost = true;
     this.connections = {};
     this.pendingMessages = {};
     this.onMessageCallback = onMessage;
 
-    this.roomCode = this.generateRoomCode();
+    if (retryCount === 0) {
+      this.roomCode = this.generateRoomCode();
+    } else {
+      this.roomCode = this.generateRoomCode();
+      console.log(`Room code collision or unavailable ID. Retrying with new code: ${this.roomCode}`);
+    }
 
     return new Promise((resolve, reject) => {
-      // Connect to the public PeerJS cloud server using our custom room code as the peer ID
-      this.peer = new Peer(`imposter-${this.roomCode}`);
+      let timeoutId = setTimeout(() => {
+        this.disconnect();
+        reject(new Error('Hosting timed out. PeerJS signaling server is not responding.'));
+      }, 10000);
+
+      this.peer = new Peer(`imposter-${this.roomCode}`, {
+        debug: 1,
+        config: {
+          iceServers: ICE_SERVERS
+        }
+      });
 
       this.peer.on('open', (id) => {
+        clearTimeout(timeoutId);
         this.myPeerId = id;
         onStatusChange('connected');
+        this.startPingInterval();
         resolve(this.roomCode);
       });
 
+      this.peer.on('disconnected', () => {
+        console.log('Host disconnected from signaling server. Attempting reconnect...');
+        if (this.peer && !this.peer.destroyed) {
+          this.peer.reconnect();
+        }
+      });
+
       this.peer.on('connection', (conn) => {
-        // Reject banned players immediately
+        // Reject banned players immediately (by Peer ID if re-connecting via existing WebRTC channel)
         if (this.bannedIds.has(conn.peer)) {
           conn.on('open', () => {
-            conn.send({ type: 'KICKED' });
+            conn.send({ type: 'KICKED', reason: 'Banned from the room', isBan: true });
             setTimeout(() => conn.close(), 500);
           });
           return;
@@ -92,7 +215,27 @@ class MultiplayerService {
 
         conn.on('data', (data: any) => {
           const msg = data as NetworkMessage;
-          if (msg.type === 'JOIN') {
+          if (msg.type === 'PING') {
+            conn.send({ type: 'PONG', timestamp: msg.timestamp });
+          } else if (msg.type === 'PONG') {
+            const rtt = Date.now() - msg.timestamp;
+            this.playerPings[conn.peer] = rtt;
+            this.onPingCallback?.(this.playerPings);
+            this.sendPingUpdate();
+          } else if (msg.type === 'JOIN') {
+            const deviceId = msg.deviceId || `fallback_${conn.peer}`;
+            if (this.bannedDeviceIds.has(deviceId)) {
+              const reason = this.bannedDeviceIds.get(deviceId);
+              conn.send({ type: 'KICKED', reason: reason || 'Banned from the room', isBan: true });
+              setTimeout(() => {
+                try {
+                  conn.close();
+                } catch (e) {}
+              }, 500);
+              return;
+            }
+            this.peerToDeviceMap.set(conn.peer, deviceId);
+
             onPlayerJoined({
               id: conn.peer,
               name: msg.name,
@@ -105,20 +248,41 @@ class MultiplayerService {
 
         conn.on('close', () => {
           delete this.connections[conn.peer];
+          delete this.playerPings[conn.peer];
+          this.onPingCallback?.(this.playerPings);
+          this.sendPingUpdate();
           onPlayerDisconnected(conn.peer);
         });
 
         conn.on('error', (err) => {
           console.error('Connection error: ', err);
           delete this.connections[conn.peer];
+          delete this.playerPings[conn.peer];
+          this.onPingCallback?.(this.playerPings);
+          this.sendPingUpdate();
           onPlayerDisconnected(conn.peer);
         });
       });
 
-      this.peer.on('error', (err) => {
-        console.error('Peer error: ', err);
-        onStatusChange('error', err.message);
-        reject(err);
+      this.peer.on('error', (err: any) => {
+        
+        // If ID is taken, retry with a new code (up to 5 times)
+        // If ID is taken, retry with a new code (up to 5 times)
+        if (err.type === 'unavailable-id' && retryCount < 5) {
+          if (this.peer) {
+            try {
+              this.peer.destroy();
+            } catch (e) {}
+            this.peer = null;
+          }
+          this.initHost(onMessage, onStatusChange, onPlayerJoined, onPlayerDisconnected, retryCount + 1)
+            .then(resolve)
+            .catch(reject);
+        } else {
+          this.disconnect();
+          onStatusChange('error', err.message);
+          reject(err);
+        }
       });
     });
   }
@@ -135,32 +299,69 @@ class MultiplayerService {
     this.onMessageCallback = onMessage;
 
     return new Promise((resolve, reject) => {
-      this.peer = new Peer();
+      let timeoutId = setTimeout(() => {
+        this.disconnect();
+        reject(new Error('Connection timed out. The host may be offline or unreachable due to network restrictions.'));
+      }, 10000);
+
+      this.peer = new Peer({
+        debug: 1,
+        config: {
+          iceServers: ICE_SERVERS
+        }
+      });
 
       this.peer.on('open', (id) => {
         this.myPeerId = id;
         
         // Connect to the host's peer ID
         const hostPeerId = `imposter-${roomCode}`;
-        const conn = this.peer!.connect(hostPeerId);
+        let conn: DataConnection;
+        try {
+          conn = this.peer!.connect(hostPeerId);
+        } catch (err: any) {
+          clearTimeout(timeoutId);
+          this.disconnect();
+          reject(new Error('Connection timed out. The host may be offline or unreachable due to network restrictions.'));
+          return;
+        }
 
         conn.on('open', () => {
+          clearTimeout(timeoutId);
           this.connections[hostPeerId] = conn;
           onStatusChange('connected');
           this.flushPendingMessages(hostPeerId);
-          
+          this.startPingInterval();
+
           // Instantly send JOIN message to host
           conn.send({
             type: 'JOIN',
             name: playerName,
             avatar: playerAvatar,
             playerId: id,
+            deviceId: getDeviceId(),
           });
           resolve();
         });
 
         conn.on('data', (data: any) => {
-          this.onMessageCallback?.(hostPeerId, data as NetworkMessage);
+          const msg = data as NetworkMessage;
+          if (msg.type === 'PING') {
+            conn.send({ type: 'PONG', timestamp: msg.timestamp });
+          } else if (msg.type === 'PONG') {
+            const rtt = Date.now() - msg.timestamp;
+            this.playerPings[hostPeerId] = rtt;
+            this.onPingCallback?.(this.playerPings);
+          } else if (msg.type === 'PING_UPDATE') {
+            const hostPing = this.playerPings[hostPeerId];
+            this.playerPings = { ...msg.pings };
+            if (hostPing !== undefined) {
+              this.playerPings[hostPeerId] = hostPing;
+            }
+            this.onPingCallback?.(this.playerPings);
+          } else {
+            this.onMessageCallback?.(hostPeerId, msg);
+          }
         });
 
         conn.on('close', () => {
@@ -168,14 +369,25 @@ class MultiplayerService {
         });
 
         conn.on('error', (err) => {
+          clearTimeout(timeoutId);
+          this.disconnect();
           onStatusChange('error', err.message);
-          reject(err);
+          reject(new Error('Connection timed out. The host may be offline or unreachable due to network restrictions.'));
         });
       });
 
-      this.peer.on('error', (err) => {
+      this.peer.on('disconnected', () => {
+        console.log('Guest disconnected from signaling server. Attempting reconnect...');
+        if (this.peer && !this.peer.destroyed) {
+          this.peer.reconnect();
+        }
+      });
+
+      this.peer.on('error', (err: any) => {
+        clearTimeout(timeoutId);
+        this.disconnect();
         onStatusChange('error', err.message);
-        reject(err);
+        reject(new Error('Connection timed out. The host may be offline or unreachable due to network restrictions.'));
       });
     });
   }
@@ -226,14 +438,18 @@ class MultiplayerService {
     });
   }
 
-  public kickPlayer(playerId: string) {
+  public kickPlayer(playerId: string, reason?: string, isBan?: boolean) {
     if (this.isHost) {
       const conn = this.connections[playerId];
       if (conn) {
         if (conn.open) {
-          conn.send({ type: 'KICKED' });
+          conn.send({ type: 'KICKED', reason, isBan });
         }
-        conn.close();
+        setTimeout(() => {
+          try {
+            conn.close();
+          } catch (e) {}
+        }, 500);
         delete this.connections[playerId];
       }
     }
@@ -253,14 +469,19 @@ class MultiplayerService {
     }
   }
 
-  public banPlayer(playerId: string) {
+  public banPlayer(playerId: string, reason?: string) {
     if (this.isHost) {
       this.bannedIds.add(playerId);
-      this.kickPlayer(playerId);
+      const deviceId = this.peerToDeviceMap.get(playerId);
+      if (deviceId) {
+        this.bannedDeviceIds.set(deviceId, reason || 'Banned by host');
+      }
+      this.kickPlayer(playerId, reason, true);
     }
   }
 
   public disconnect() {
+    this.stopPingInterval();
     Object.values(this.connections).forEach((conn) => {
       try {
         conn.close();
@@ -281,6 +502,8 @@ class MultiplayerService {
     }
     
     this.bannedIds.clear();
+    this.bannedDeviceIds.clear();
+    this.peerToDeviceMap.clear();
     this.isHost = false;
     this.roomCode = '';
     this.myPeerId = '';
@@ -308,3 +531,9 @@ class MultiplayerService {
 }
 
 export const multiplayer = new MultiplayerService();
+
+if (typeof window !== 'undefined') {
+  window.addEventListener('beforeunload', () => {
+    multiplayer.disconnect();
+  });
+}

@@ -77,7 +77,8 @@ export const RevealCard: React.FC<RevealCardProps> = ({
             {roleBadge ? (
               <span className="px-3 py-0.5 rounded-full text-[10px] font-extrabold bg-brand-danger/20 text-brand-danger tracking-widest uppercase border border-brand-danger/30 animate-pulse flex items-center gap-1">
                 <span className="w-1.5 h-1.5 rounded-full bg-brand-danger animate-ping" />
-                ⚠️ {roleBadge}
+                <ShieldAlert className="w-3 h-3 text-brand-danger" />
+                {roleBadge}
               </span>
             ) : (
               <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-brand-secondary/15 text-brand-secondary tracking-widest uppercase border border-brand-secondary/20">

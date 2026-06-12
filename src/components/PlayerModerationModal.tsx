@@ -1,7 +1,7 @@
 import React from 'react';
 import { useGame } from '../context/GameContext';
 import { Button } from './Button';
-import { X, ShieldAlert, UserMinus, ShieldCheck, VolumeX, Volume2, Shield } from 'lucide-react';
+import { X, ShieldAlert, UserMinus, VolumeX, Volume2, Shield } from 'lucide-react';
 import { playClick } from '../utils/sounds';
 
 interface PlayerModerationModalProps {
@@ -21,43 +21,37 @@ export const PlayerModerationModal: React.FC<PlayerModerationModalProps> = ({
 }) => {
   const {
     myPlayerId,
-    isLobbyAdmin,
     mutedPlayerIds,
     toggleMutePlayer,
-    kickPlayer,
-    banPlayer,
-    transferHost,
+    isMultiplayer,
+    onlinePlayers,
+    kickVotes,
+    banVotes,
+    voteToKickPlayer,
+    voteToBanPlayer,
+    lobbyAdminId,
   } = useGame();
 
   const isMe = playerId === myPlayerId;
   const isMuted = mutedPlayerIds.includes(playerId);
-
-  const handleKick = () => {
-    playClick();
-    kickPlayer(playerId);
-    onClose();
-  };
-
-  const handleBan = () => {
-    playClick();
-    banPlayer(playerId);
-    onClose();
-  };
-
-  const handlePassHost = () => {
-    playClick();
-    transferHost(playerId);
-    onClose();
-  };
+  const isHostTarget = playerId === lobbyAdminId;
 
   const handleToggleMute = () => {
     toggleMutePlayer(playerId);
   };
 
+  const handleVoteKick = () => {
+    voteToKickPlayer(playerId);
+  };
+
+  const handleVoteBan = () => {
+    voteToBanPlayer(playerId);
+  };
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-brand-dark/85 backdrop-blur-md animate-fade-in">
       <div className="w-full max-w-sm rounded-3xl glass-panel border border-white/10 bg-brand-card p-6 shadow-2xl animate-scale-in relative">
-        
+
         {/* Close Button */}
         <button
           onClick={() => {
@@ -89,6 +83,8 @@ export const PlayerModerationModal: React.FC<PlayerModerationModalProps> = ({
 
         {/* Action Panel */}
         <div className="flex flex-col gap-2.5 mt-6 w-full">
+
+          {/* Mute Chat — available to everyone for any non-self player */}
           {!isMe && (
             <Button
               variant="glass"
@@ -109,37 +105,63 @@ export const PlayerModerationModal: React.FC<PlayerModerationModalProps> = ({
             </Button>
           )}
 
-          {!isMe && isLobbyAdmin && (
-            <>
-              {/* Pass Host */}
-              <Button
-                variant="primary-glass"
-                onClick={handlePassHost}
-                className="w-full py-3 rounded-xl text-xs font-bold flex items-center justify-center gap-2 cursor-pointer"
-              >
-                <ShieldCheck className="w-4 h-4 text-brand-primary" />
-                Make Lobby Host
-              </Button>
+          {/* Democratic Vote Moderation — available to everyone; guests/host cannot vote on the host */}
+          {!isMe && isMultiplayer && !isHostTarget && (
+            <div className="border border-white/5 bg-white/[0.01] rounded-2xl p-3 flex flex-col gap-2.5 mb-2 text-center select-none">
+              <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest block">
+                Democratic Vote Moderation
+              </span>
+              <div className="grid grid-cols-2 gap-2 mt-1">
+                {/* Vote Kick Button */}
+                <button
+                  disabled={onlinePlayers.length < 3}
+                  onClick={handleVoteKick}
+                  className={`py-2 px-3 text-[11px] font-bold rounded-xl border flex flex-col items-center justify-center gap-1 transition-all active:scale-[0.97] cursor-pointer disabled:opacity-40 disabled:pointer-events-none ${
+                    kickVotes[playerId]?.includes(myPlayerId)
+                      ? 'bg-brand-primary/20 border-brand-primary text-white'
+                      : 'bg-white/5 border-white/10 text-slate-400 hover:bg-white/10 hover:text-slate-200'
+                  }`}
+                >
+                  <UserMinus className="w-3.5 h-3.5" />
+                  <span>
+                    {kickVotes[playerId]?.includes(myPlayerId) ? 'Retract Kick' : 'Vote Kick'}
+                  </span>
+                  <span className="text-[9px] opacity-75 font-semibold leading-none mt-0.5">
+                    {onlinePlayers.length >= 3
+                      ? `${kickVotes[playerId]?.length || 0} / ${Math.floor(onlinePlayers.length / 2) + 1} votes`
+                      : 'Need 3+ players'}
+                  </span>
+                </button>
 
-              {/* Kick player */}
-              <button
-                onClick={handleKick}
-                className="w-full py-3 text-xs font-bold flex items-center justify-center gap-2 bg-brand-danger/10 border border-brand-danger/20 text-brand-danger hover:bg-brand-danger/20 hover:border-brand-danger/30 transition-all cursor-pointer inline-flex items-center justify-center rounded-2xl active:scale-[0.98] disabled:opacity-50 disabled:pointer-events-none focus:outline-none focus:ring-2 focus:ring-brand-primary/50 focus:ring-offset-2 focus:ring-offset-brand-dark"
-              >
-                <UserMinus className="w-4 h-4" />
-                Kick Player
-              </button>
+                {/* Vote Ban Button */}
+                <button
+                  disabled={onlinePlayers.length < 3}
+                  onClick={handleVoteBan}
+                  className={`py-2 px-3 text-[11px] font-bold rounded-xl border flex flex-col items-center justify-center gap-1 transition-all active:scale-[0.97] cursor-pointer disabled:opacity-40 disabled:pointer-events-none ${
+                    banVotes[playerId]?.includes(myPlayerId)
+                      ? 'bg-brand-danger/20 border-brand-danger text-white'
+                      : 'bg-white/5 border-white/10 text-slate-400 hover:bg-white/10 hover:text-slate-200'
+                  }`}
+                >
+                  <ShieldAlert className="w-3.5 h-3.5" />
+                  <span>
+                    {banVotes[playerId]?.includes(myPlayerId) ? 'Retract Ban' : 'Vote Ban'}
+                  </span>
+                  <span className="text-[9px] opacity-75 font-semibold leading-none mt-0.5">
+                    {onlinePlayers.length >= 3
+                      ? `${banVotes[playerId]?.length || 0} / ${Math.floor(onlinePlayers.length / 2) + 1} votes`
+                      : 'Need 3+ players'}
+                  </span>
+                </button>
+              </div>
 
-              {/* Ban player */}
-              <Button
-                variant="danger"
-                onClick={handleBan}
-                className="w-full py-3 rounded-xl text-xs font-bold flex items-center justify-center gap-2 cursor-pointer shadow-md shadow-brand-danger/10"
-              >
-                <ShieldAlert className="w-4 h-4" />
-                Ban Player (Block re-entry)
-              </Button>
-            </>
+              {/* Host-target notice */}
+              {isHostTarget && !isMe && (
+                <p className="text-[10px] text-slate-600 font-semibold mt-1">
+                  You cannot vote to remove the host.
+                </p>
+              )}
+            </div>
           )}
 
           {isMe && (

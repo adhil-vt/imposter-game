@@ -31,6 +31,7 @@ export interface ChatMessage {
   text: string;
   timestamp: number;
   isSystem?: boolean;
+  chatScope?: 'lobby' | 'game';
 }
 
 export type GameState = 'HOME' | 'RULES' | 'ABOUT' | 'SETUP' | 'REVEAL' | 'CLUES' | 'VOTING' | 'RESULTS' | 'CHANGELOG';
@@ -153,6 +154,9 @@ interface GameContextType {
   hintsEnabled: boolean;
   setHintsEnabled: (val: boolean) => void;
   
+  clueTimerLimit: number;
+  setClueTimerLimit: (limit: number) => void;
+  
   // Reveal flow state
   currentRevealIndex: number;
   isWordRevealed: boolean;
@@ -221,6 +225,9 @@ interface GameContextType {
   onlinePlayers: NetworkPlayer[];
   playersWhoRevealed: string[];
   readyPlayers: string[];
+  isSpectating: boolean;
+  activeGameState: GameState | null;
+  gameStartedAt: number;
   setPlayerReady: (ready: boolean) => void;
   activeClueIndex: number;
   setActiveClueIndex: (idx: number) => void;
@@ -237,18 +244,39 @@ interface GameContextType {
   unreadChatCount: number;
   setUnreadChatCount: (count: number) => void;
   sendChatMessage: (text: string) => void;
-  kickPlayer: (playerId: string) => void;
+  kickPlayer: (playerId: string, reason?: string) => void;
   isLobbyAdmin: boolean;
   lobbyAdminId: string;
   toggleMutePlayer: (playerId: string) => void;
   mutedPlayerIds: string[];
-  banPlayer: (playerId: string) => void;
+  banPlayer: (playerId: string, reason?: string) => void;
   transferHost: (playerId: string) => void;
   updatePlayerName: (newName: string) => void;
+  playerPings: Record<string, number>;
+  kickVotes: Record<string, string[]>;
+  banVotes: Record<string, string[]>;
+  voteToKickPlayer: (targetId: string) => void;
+  voteToBanPlayer: (targetId: string) => void;
+  selectedModerationPlayer: NetworkPlayer | null;
+  setSelectedModerationPlayer: (player: NetworkPlayer | null) => void;
   roomNotice: {
     id: string;
     text: string;
   } | null;
+  voteNotification: {
+    id: string;
+    message: string;
+    onAccept: () => void;
+    onDismiss: () => void;
+  } | null;
+  dismissVoteNotification: () => void;
+  isVoiceActive: boolean;
+  toggleVoice: () => Promise<void>;
+  micVolume: number;
+  setMicVolume: (v: number) => void;
+  speakerVolume: number;
+  setSpeakerVolume: (v: number) => void;
+  playersSpeaking: Record<string, boolean>;
 }
 
 const GameContext = createContext<GameContextType | undefined>(undefined);
@@ -341,6 +369,11 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return saved !== null ? saved === 'true' : true;
   });
 
+  const [clueTimerLimit, setClueTimerLimit] = useState<number>(() => {
+    const saved = localStorage.getItem('impostor_clue_timer_limit');
+    return saved ? parseInt(saved, 10) : 30;
+  });
+
   // Sync toggles with LocalStorage
   useEffect(() => {
     setSoundEffectsEnabled(soundEnabled);
@@ -354,6 +387,10 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
   useEffect(() => {
     localStorage.setItem('impostor_hints_enabled', String(hintsEnabled));
   }, [hintsEnabled]);
+
+  useEffect(() => {
+    localStorage.setItem('impostor_clue_timer_limit', String(clueTimerLimit));
+  }, [clueTimerLimit]);
 
   useEffect(() => {
     localStorage.setItem('impostor_difficulty', difficulty);
@@ -448,10 +485,27 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [myPlayerId, setMyPlayerId] = useState<string>('');
   const [multiplayerStatus, setMultiplayerStatus] = useState<GameContextType['multiplayerStatus']>('idle');
   const [onlinePlayers, setOnlinePlayers] = useState<NetworkPlayer[]>([]);
+  const [playerPings, setPlayerPings] = useState<Record<string, number>>({});
+  const [kickVotes, setKickVotes] = useState<Record<string, string[]>>({});
+  const [banVotes, setBanVotes] = useState<Record<string, string[]>>({});
+  const [selectedModerationPlayer, setSelectedModerationPlayer] = useState<NetworkPlayer | null>(null);
   const [playersWhoRevealed, setPlayersWhoRevealed] = useState<string[]>([]);
+  const [isSpectating, setIsSpectating] = useState<boolean>(false);
+  const [activeGameState, setActiveGameState] = useState<GameState | null>(null);
+  const [gameStartedAt, setGameStartedAt] = useState<number>(0);
+
+  useEffect(() => {
+    multiplayer.registerPingCallback((pings) => {
+      setPlayerPings({ ...pings });
+    });
+    return () => {
+      multiplayer.registerPingCallback(null);
+      cleanupVoice();
+    };
+  }, []);
   const [readyPlayers, setReadyPlayers] = useState<string[]>([]);
   const [activeClueIndex, setActiveClueIndex] = useState<number>(0);
-  const [timerSeconds, setTimerSeconds] = useState<number>(30);
+  const [timerSeconds, setTimerSeconds] = useState<number>(clueTimerLimit);
   const [timerActive, setTimerActive] = useState<boolean>(false);
 
   const [lobbyAdminId, setLobbyAdminId] = useState<string>('');
@@ -488,15 +542,95 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
         selectedCategories,
         impostorKnowsRole,
         randomizeOrder,
-        hintsEnabled
+        hintsEnabled,
+        clueTimerLimit
       });
     }
-  }, [difficulty, selectedCategories, impostorKnowsRole, randomizeOrder, hintsEnabled, isMultiplayer, isLobbyAdmin]);
+  }, [difficulty, selectedCategories, impostorKnowsRole, randomizeOrder, hintsEnabled, clueTimerLimit, isMultiplayer, isLobbyAdmin]);
+
+  // Keep activeGameState synced for host/local play
+  useEffect(() => {
+    if (!isMultiplayer || isHost) {
+      if (gameState === 'SETUP' || gameState === 'HOME') {
+        setActiveGameState(null);
+      } else {
+        setActiveGameState(gameState);
+      }
+    }
+  }, [gameState, isMultiplayer, isHost]);
 
   // Chat states
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
   const [isChatOpen, setIsChatOpen] = useState<boolean>(false);
   const [unreadChatCount, setUnreadChatCount] = useState<number>(0);
+
+  // Voice states
+  const [isVoiceActive, setIsVoiceActive] = useState<boolean>(false);
+  const [micVolume, setMicVolume] = useState<number>(() => {
+    const saved = localStorage.getItem('imposter_mic_volume');
+    return saved !== null ? parseFloat(saved) : 0.8;
+  });
+  const [speakerVolume, setSpeakerVolume] = useState<number>(() => {
+    const saved = localStorage.getItem('imposter_speaker_volume');
+    return saved !== null ? parseFloat(saved) : 0.8;
+  });
+  const [playersSpeaking, setPlayersSpeaking] = useState<Record<string, boolean>>({});
+
+  // Audio Context and Stream Refs
+  const localStreamRef = useRef<MediaStream | null>(null);
+  const audioContextRef = useRef<AudioContext | null>(null);
+  const gainNodeRef = useRef<GainNode | null>(null);
+  const localDestinationStreamRef = useRef<MediaStream | null>(null);
+  const activeCallsRef = useRef<Record<string, any>>({});
+  const audioElementsRef = useRef<Record<string, HTMLAudioElement>>({});
+  const voiceSpeakingDetectorsRef = useRef<Record<string, { interval: any; analyser: AnalyserNode }>>({});
+
+  // Persist volume settings
+  useEffect(() => {
+    localStorage.setItem('imposter_mic_volume', String(micVolume));
+    if (gainNodeRef.current) {
+      gainNodeRef.current.gain.value = micVolume;
+    }
+  }, [micVolume]);
+
+  useEffect(() => {
+    localStorage.setItem('imposter_speaker_volume', String(speakerVolume));
+    Object.values(audioElementsRef.current).forEach(audio => {
+      audio.volume = speakerVolume;
+    });
+  }, [speakerVolume]);
+
+  const appendChatMessage = (msg: ChatMessage): ChatMessage => {
+    const scope = msg.chatScope || ((gameStateRef.current === 'SETUP' || isSpectatingRef.current) ? 'lobby' : 'game');
+    const msgWithScope = {
+      ...msg,
+      chatScope: scope
+    };
+
+    setChatMessages(prev => {
+      if (prev.some(m => m.id === msgWithScope.id)) return prev;
+
+      const isMessageVisible = (() => {
+        if (isSpectatingRef.current) {
+          return !msgWithScope.chatScope || msgWithScope.chatScope === 'lobby';
+        } else {
+          return msgWithScope.chatScope === 'game' || msgWithScope.timestamp < gameStartedAtRef.current;
+        }
+      })();
+
+      if (isMessageVisible && msgWithScope.senderId !== myPlayerIdRef.current) {
+        if (!isChatOpenRef.current) {
+          setUnreadChatCount(c => c + 1);
+        }
+        playNotification();
+      }
+
+      return [...prev, msgWithScope];
+    });
+
+    return msgWithScope;
+  };
+
   const [roomNotice, setRoomNotice] = useState<GameContextType['roomNotice']>(null);
   const roomNoticeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -514,6 +648,75 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
     roomNoticeTimerRef.current = setTimeout(() => {
       setRoomNotice(null);
     }, 4000);
+  };
+
+  // Non-blocking vote notification toast
+  const [voteNotification, setVoteNotification] = useState<GameContextType['voteNotification']>(null);
+  const voteNotificationTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const pushVoteNotification = (notification: GameContextType['voteNotification']) => {
+    if (voteNotificationTimerRef.current) {
+      clearTimeout(voteNotificationTimerRef.current);
+    }
+    setVoteNotification(notification);
+    // Auto-dismiss after 10s if not acted upon
+    if (notification) {
+      voteNotificationTimerRef.current = setTimeout(() => {
+        setVoteNotification(null);
+      }, 10000);
+    }
+  };
+
+  const dismissVoteNotification = () => {
+    if (voteNotificationTimerRef.current) {
+      clearTimeout(voteNotificationTimerRef.current);
+    }
+    setVoteNotification(null);
+  };
+
+  const triggerVoteNotificationLocal = (
+    voteType: 'KICK' | 'BAN',
+    targetId: string,
+    targetName: string,
+    initiatorId: string,
+    initiatorName: string
+  ) => {
+    const currentId = myPlayerIdRef.current;
+    if (targetId !== currentId && initiatorId !== currentId) {
+      const action = voteType === 'KICK' ? 'kick' : 'ban';
+      const label = voteType === 'KICK' ? 'Kick' : 'Ban';
+      pushVoteNotification({
+        id: `vote_${Date.now()}`,
+        message: `🗳️ ${initiatorName} wants to ${action} ${targetName}. Vote ${label}?`,
+        onAccept: () => {
+          if (multiplayer.isHost) {
+            if (voteType === 'KICK') {
+              handleVoteKickRequest(targetId, currentId);
+            } else {
+              handleVoteBanRequest(targetId, currentId);
+            }
+          } else {
+            if (voteType === 'KICK') {
+              multiplayer.send({
+                type: 'VOTE_KICK_REQUEST',
+                targetId,
+                voterId: currentId
+              });
+            } else {
+              multiplayer.send({
+                type: 'VOTE_BAN_REQUEST',
+                targetId,
+                voterId: currentId
+              });
+            }
+          }
+          setVoteNotification(null);
+        },
+        onDismiss: () => {
+          setVoteNotification(null);
+        }
+      });
+    }
   };
 
   useEffect(() => {
@@ -535,7 +738,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     if (playersWhoRevealed.length === players.length) {
       setGameState('CLUES');
-      setTimerSeconds(30);
+      setTimerSeconds(clueTimerLimit);
       setTimerActive(false);
       setActiveClueIndex(0);
 
@@ -543,7 +746,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
         multiplayer.send({
           type: 'TIMER_SYNC',
           activeClueIndex: 0,
-          timerSeconds: 30,
+          timerSeconds: clueTimerLimit,
           timerActive: false
         });
       }
@@ -577,38 +780,56 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
       timestamp: Date.now()
     };
     
-    setChatMessages(prev => [...prev, msg]);
+    const msgWithScope = appendChatMessage(msg);
     
     if (isMultiplayer) {
       multiplayer.send({
         type: 'CHAT',
-        message: msg
+        message: msgWithScope
       });
     }
   };
 
-  const kickPlayer = (playerId: string) => {
+  const kickPlayer = (playerId: string, reason?: string) => {
     if (isMultiplayer) {
       if (isHost) {
         const kickedPlayer = onlinePlayers.find(p => p.id === playerId);
         if (kickedPlayer) {
           kickedPlayersRef.current.add(playerId);
-          multiplayer.kickPlayer(playerId);
+          multiplayer.kickPlayer(playerId, reason, false);
           
+          const reasonText = reason ? ` (Reason: ${reason})` : '';
           const systemMsg: ChatMessage = {
             id: `sys_${Date.now()}_${Math.random()}`,
             senderId: 'system',
             senderName: 'System',
-            senderAvatar: '🤖',
-            text: `${kickedPlayer.name} was kicked from the room.`,
+            senderAvatar: 'system-kick',
+            text: `${kickedPlayer.name} was kicked from the room.${reasonText}`,
             timestamp: Date.now(),
             isSystem: true
           };
-          setChatMessages(prev => [...prev, systemMsg]);
+          const msgWithScope = appendChatMessage(systemMsg);
           
           multiplayer.send({
             type: 'CHAT',
-            message: systemMsg
+            message: msgWithScope
+          });
+
+          // Sync active game player list if game is in progress
+          setPlayers(prev => {
+            const next = prev.filter(p => p.id !== playerId);
+            if (next.length !== prev.length) {
+              setPlayerOrder(ord => {
+                const nextOrd = ord.filter(id => id !== playerId);
+                multiplayer.send({
+                  type: 'GAME_PLAYERS_UPDATE',
+                  players: next,
+                  playerOrder: nextOrd
+                });
+                return nextOrd;
+              });
+            }
+            return next;
           });
         }
       } else {
@@ -620,28 +841,46 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  const banPlayer = (playerId: string) => {
+  const banPlayer = (playerId: string, reason?: string) => {
     if (isMultiplayer) {
       if (isHost) {
         const bannedPlayer = onlinePlayers.find(p => p.id === playerId);
         if (bannedPlayer) {
           kickedPlayersRef.current.add(playerId);
-          multiplayer.banPlayer(playerId);
+          multiplayer.banPlayer(playerId, reason);
           
+          const reasonText = reason ? ` (Reason: ${reason})` : '';
           const systemMsg: ChatMessage = {
             id: `sys_${Date.now()}_${Math.random()}`,
             senderId: 'system',
             senderName: 'System',
-            senderAvatar: '🚫',
-            text: `${bannedPlayer.name} was banned from the room.`,
+            senderAvatar: 'system-ban',
+            text: `${bannedPlayer.name} was banned from the room.${reasonText}`,
             timestamp: Date.now(),
             isSystem: true
           };
-          setChatMessages(prev => [...prev, systemMsg]);
+          const msgWithScope = appendChatMessage(systemMsg);
           
           multiplayer.send({
             type: 'CHAT',
-            message: systemMsg
+            message: msgWithScope
+          });
+
+          // Sync active game player list if game is in progress
+          setPlayers(prev => {
+            const next = prev.filter(p => p.id !== playerId);
+            if (next.length !== prev.length) {
+              setPlayerOrder(ord => {
+                const nextOrd = ord.filter(id => id !== playerId);
+                multiplayer.send({
+                  type: 'GAME_PLAYERS_UPDATE',
+                  players: next,
+                  playerOrder: nextOrd
+                });
+                return nextOrd;
+              });
+            }
+            return next;
           });
         }
       } else {
@@ -650,6 +889,185 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
           targetId: playerId
         });
       }
+    }
+  };
+
+  const kickVotesRef = useRef<Record<string, string[]>>({});
+  const banVotesRef = useRef<Record<string, string[]>>({});
+  useEffect(() => { kickVotesRef.current = kickVotes; }, [kickVotes]);
+  useEffect(() => { banVotesRef.current = banVotes; }, [banVotes]);
+
+  const checkDemocraticMajority = (targetId: string, votesArray: string[], action: 'KICK' | 'BAN') => {
+    const totalPlayers = onlinePlayersRef.current.length;
+    const requiredVotes = Math.floor(totalPlayers / 2) + 1;
+
+    if (votesArray.length >= requiredVotes && totalPlayers >= 3) {
+      const targetPlayer = onlinePlayersRef.current.find(p => p.id === targetId);
+      const targetName = targetPlayer?.name || 'Player';
+      
+      const noticeText = action === 'KICK' 
+        ? `Democratic Vote: ${targetName} was kicked from the room (${votesArray.length}/${totalPlayers} votes).`
+        : `Democratic Vote: ${targetName} was banned from the room (${votesArray.length}/${totalPlayers} votes).`;
+
+      setKickVotes(prev => {
+        const next = { ...prev };
+        delete next[targetId];
+        return next;
+      });
+      setBanVotes(prev => {
+        const next = { ...prev };
+        delete next[targetId];
+        return next;
+      });
+
+      pushRoomNotice(noticeText);
+      const systemMsg: ChatMessage = {
+        id: `sys_vote_${Date.now()}_${Math.random()}`,
+        senderId: 'system',
+        senderName: 'System',
+        senderAvatar: action === 'KICK' ? 'system-kick' : 'system-ban',
+        text: noticeText,
+        timestamp: Date.now(),
+        isSystem: true
+      };
+
+      const msgWithScope = appendChatMessage(systemMsg);
+      multiplayer.send({
+        type: 'CHAT',
+        message: msgWithScope
+      });
+
+      if (action === 'KICK') {
+        kickedPlayersRef.current.add(targetId);
+        multiplayer.kickPlayer(targetId, 'Kicked by democratic vote');
+      } else {
+        kickedPlayersRef.current.add(targetId);
+        multiplayer.banPlayer(targetId, 'Banned by democratic vote');
+      }
+
+      setPlayers(prev => {
+        const next = prev.filter(p => p.id !== targetId);
+        setPlayerOrder(ord => {
+          const nextOrd = ord.filter(id => id !== targetId);
+          multiplayer.send({
+            type: 'GAME_PLAYERS_UPDATE',
+            players: next,
+            playerOrder: nextOrd
+          });
+          return nextOrd;
+        });
+        return next;
+      });
+      
+      setTimeout(() => {
+        multiplayer.send({
+          type: 'VOTE_KICK_BAN_SYNC',
+          kickVotes: {},
+          banVotes: {}
+        });
+      }, 500);
+    }
+  };
+
+  const handleVoteKickRequest = (targetId: string, voterId: string) => {
+    setKickVotes(prev => {
+      const current = prev[targetId] || [];
+      const isRetracting = current.includes(voterId);
+      const nextVotes = isRetracting
+        ? current.filter(id => id !== voterId)
+        : [...current, voterId];
+      const next = { ...prev, [targetId]: nextVotes };
+      
+      multiplayer.send({
+        type: 'VOTE_KICK_BAN_SYNC',
+        kickVotes: next,
+        banVotes: banVotesRef.current
+      });
+
+      // Broadcast VOTE_INITIATED when a new vote starts (first vote cast)
+      if (!isRetracting && current.length === 0) {
+        const target = onlinePlayersRef.current.find(p => p.id === targetId);
+        const initiator = onlinePlayersRef.current.find(p => p.id === voterId);
+        if (target && initiator) {
+          multiplayer.send({
+            type: 'VOTE_INITIATED',
+            targetId,
+            targetName: target.name,
+            voteType: 'KICK',
+            initiatorName: initiator.name,
+            initiatorId: voterId
+          });
+          triggerVoteNotificationLocal('KICK', targetId, target.name, voterId, initiator.name);
+        }
+      }
+      
+      checkDemocraticMajority(targetId, nextVotes, 'KICK');
+      return next;
+    });
+  };
+
+  const handleVoteBanRequest = (targetId: string, voterId: string) => {
+    setBanVotes(prev => {
+      const current = prev[targetId] || [];
+      const isRetracting = current.includes(voterId);
+      const nextVotes = isRetracting
+        ? current.filter(id => id !== voterId)
+        : [...current, voterId];
+      const next = { ...prev, [targetId]: nextVotes };
+      
+      multiplayer.send({
+        type: 'VOTE_KICK_BAN_SYNC',
+        kickVotes: kickVotesRef.current,
+        banVotes: next
+      });
+
+      // Broadcast VOTE_INITIATED when a new vote starts (first vote cast)
+      if (!isRetracting && current.length === 0) {
+        const target = onlinePlayersRef.current.find(p => p.id === targetId);
+        const initiator = onlinePlayersRef.current.find(p => p.id === voterId);
+        if (target && initiator) {
+          multiplayer.send({
+            type: 'VOTE_INITIATED',
+            targetId,
+            targetName: target.name,
+            voteType: 'BAN',
+            initiatorName: initiator.name,
+            initiatorId: voterId
+          });
+          triggerVoteNotificationLocal('BAN', targetId, target.name, voterId, initiator.name);
+        }
+      }
+      
+      checkDemocraticMajority(targetId, nextVotes, 'BAN');
+      return next;
+    });
+  };
+
+  const voteToKickPlayer = (targetId: string) => {
+    playClick();
+    if (!isMultiplayer) return;
+    if (isHost) {
+      handleVoteKickRequest(targetId, myPlayerId);
+    } else {
+      multiplayer.send({
+        type: 'VOTE_KICK_REQUEST',
+        targetId,
+        voterId: myPlayerId
+      });
+    }
+  };
+
+  const voteToBanPlayer = (targetId: string) => {
+    playClick();
+    if (!isMultiplayer) return;
+    if (isHost) {
+      handleVoteBanRequest(targetId, myPlayerId);
+    } else {
+      multiplayer.send({
+        type: 'VOTE_BAN_REQUEST',
+        targetId,
+        voterId: myPlayerId
+      });
     }
   };
 
@@ -674,15 +1092,15 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
           id: `sys_${Date.now()}_${Math.random()}`,
           senderId: 'system',
           senderName: 'System',
-          senderAvatar: '👑',
+          senderAvatar: 'system-crown',
           text: `${newAdminName} is now the Lobby Host.`,
           timestamp: Date.now(),
           isSystem: true
         };
-        setChatMessages(prev => [...prev, systemMsg]);
+        const msgWithScope = appendChatMessage(systemMsg);
         multiplayer.send({
           type: 'CHAT',
-          message: systemMsg
+          message: msgWithScope
         });
 
         multiplayer.send({
@@ -731,15 +1149,15 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
           id: `sys_${Date.now()}_${Math.random()}`,
           senderId: 'system',
           senderName: 'System',
-          senderAvatar: '✏️',
+          senderAvatar: 'system-edit',
           text: `${oldName} changed their name to ${trimmed}.`,
           timestamp: Date.now(),
           isSystem: true
         };
-        setChatMessages(prev => [...prev, systemMsg]);
+        const msgWithScope = appendChatMessage(systemMsg);
         multiplayer.send({
           type: 'CHAT',
-          message: systemMsg
+          message: msgWithScope
         });
       } else {
         const oldPlayer = onlinePlayersRef.current.find(p => p.id === myPlayerIdRef.current);
@@ -764,6 +1182,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const isChatOpenRef = useRef(isChatOpen);
   const myPlayerIdRef = useRef(myPlayerId);
   const onlinePlayersRef = useRef(onlinePlayers);
+  const chatMessagesRef = useRef(chatMessages);
   const kickedPlayersRef = useRef<Set<string>>(new Set());
   const receivedHostLeftRef = useRef(false);
   // Set whenever THIS client deliberately leaves/closes the room. Used to
@@ -771,17 +1190,24 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
   // (the modal should only appear when the connection is genuinely lost or the
   // host ends the room). Reset on every fresh host/join.
   const intentionalLeaveRef = useRef(false);
+  const isSpectatingRef = useRef(isSpectating);
+  const gameStateRef = useRef(gameState);
+  const gameStartedAtRef = useRef(gameStartedAt);
 
   useEffect(() => { isChatOpenRef.current = isChatOpen; }, [isChatOpen]);
   useEffect(() => { myPlayerIdRef.current = myPlayerId; }, [myPlayerId]);
   useEffect(() => { onlinePlayersRef.current = onlinePlayers; }, [onlinePlayers]);
+  useEffect(() => { chatMessagesRef.current = chatMessages; }, [chatMessages]);
+  useEffect(() => { isSpectatingRef.current = isSpectating; }, [isSpectating]);
+  useEffect(() => { gameStateRef.current = gameState; }, [gameState]);
+  useEffect(() => { gameStartedAtRef.current = gameStartedAt; }, [gameStartedAt]);
 
   // Play tick sound whenever timerSeconds ticks down in active state
   useEffect(() => {
-    if (timerActive && timerSeconds > 0 && timerSeconds < 30) {
+    if (timerActive && timerSeconds > 0 && timerSeconds < clueTimerLimit) {
       playTick();
     }
-  }, [timerSeconds, timerActive]);
+  }, [timerSeconds, timerActive, clueTimerLimit]);
 
   // Broadcast state change to guests when gameState changes
   useEffect(() => {
@@ -813,22 +1239,42 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
         });
       }, 1000);
     } else if (timerSeconds === 0 && timerActive && (!isMultiplayer || isHost)) {
-      setTimerActive(false);
-      if (isMultiplayer && isHost) {
-        multiplayer.send({
-          type: 'TIMER_SYNC',
-          activeClueIndex,
-          timerSeconds: 0,
-          timerActive: false
-        });
-      }
       playBuzzer();
+      
+      const nextIdx = activeClueIndex + 1;
+      if (nextIdx < playerOrder.length) {
+        // Automatically move to the next speaker and restart the countdown
+        setActiveClueIndex(nextIdx);
+        setTimerSeconds(clueTimerLimit);
+        
+        if (isMultiplayer && isHost) {
+          multiplayer.send({
+            type: 'TIMER_SYNC',
+            activeClueIndex: nextIdx,
+            timerSeconds: clueTimerLimit,
+            timerActive: true
+          });
+        }
+      } else {
+        // Last speaker time is up, transition immediately to Voting
+        setTimerActive(false);
+        setGameState('VOTING');
+        
+        if (isMultiplayer && isHost) {
+          multiplayer.send({
+            type: 'TIMER_SYNC',
+            activeClueIndex,
+            timerSeconds: 0,
+            timerActive: false
+          });
+        }
+      }
     }
 
     return () => {
       if (timerRef) clearTimeout(timerRef);
     };
-  }, [timerActive, timerSeconds, isMultiplayer, isHost, activeClueIndex]);
+  }, [timerActive, timerSeconds, isMultiplayer, isHost, activeClueIndex, playerOrder, clueTimerLimit]);
 
   // Handle incoming network messages
   const handleIncomingMessage = (_senderId: string, msg: NetworkMessage) => {
@@ -854,15 +1300,15 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
             id: `sys_${Date.now()}_${Math.random()}`,
             senderId: 'system',
             senderName: 'System',
-            senderAvatar: '✏️',
+            senderAvatar: 'system-edit',
             text: `${oldName} changed their name to ${sanitizedNewName}.`,
             timestamp: Date.now(),
             isSystem: true
           };
-          setChatMessages(prev => [...prev, systemMsg]);
+          const msgWithScope = appendChatMessage(systemMsg);
           multiplayer.send({
             type: 'CHAT',
-            message: systemMsg
+            message: msgWithScope
           });
         }
         break;
@@ -884,6 +1330,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
             setImpostorKnowsRole(msg.impostorKnowsRole);
             setRandomizeOrder(msg.randomizeOrder);
             setHintsEnabled(msg.hintsEnabled);
+            setClueTimerLimit(msg.clueTimerLimit);
             multiplayer.send(msg);
           }
         } else {
@@ -892,6 +1339,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
           setImpostorKnowsRole(msg.impostorKnowsRole);
           setRandomizeOrder(msg.randomizeOrder);
           setHintsEnabled(msg.hintsEnabled);
+          setClueTimerLimit(msg.clueTimerLimit);
         }
         break;
 
@@ -910,12 +1358,12 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
             id: `sys_${Date.now()}_${Math.random()}`,
             senderId: 'system',
             senderName: 'System',
-            senderAvatar: '👑',
+            senderAvatar: 'system-crown',
             text: `${newAdminName} is now the Lobby Host.`,
             timestamp: Date.now(),
             isSystem: true
           };
-          setChatMessages(prev => [...prev, systemMsg]);
+          appendChatMessage(systemMsg);
         };
 
         if (isHost) {
@@ -944,6 +1392,38 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
           if (sender?.isAdmin) {
             banPlayer(msg.targetId);
           }
+        }
+        break;
+
+      case 'VOTE_KICK_REQUEST':
+        if (isHost) {
+          handleVoteKickRequest(msg.targetId, msg.voterId);
+        }
+        break;
+
+      case 'VOTE_BAN_REQUEST':
+        if (isHost) {
+          handleVoteBanRequest(msg.targetId, msg.voterId);
+        }
+        break;
+
+      case 'VOTE_KICK_BAN_SYNC':
+        if (!isHost) {
+          setKickVotes(msg.kickVotes);
+          setBanVotes(msg.banVotes);
+        }
+        break;
+
+      case 'VOICE_TOGGLE':
+        if (isHost) {
+          setOnlinePlayers(prev => {
+            const next = prev.map(p => p.id === _senderId ? { ...p, isVoiceActive: msg.active } : p);
+            multiplayer.send({
+              type: 'LOBBY_UPDATE',
+              players: next
+            });
+            return next;
+          });
         }
         break;
 
@@ -983,6 +1463,9 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setVotes({});
         setWinner(null);
         setVoteStats({});
+        setIsSpectating(false);
+        setGameStartedAt(msg.gameStartedAt || Date.now());
+        setActiveGameState('REVEAL');
         setGameState('REVEAL');
         break;
 
@@ -1046,50 +1529,80 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setWinner(null);
         setVoteStats({});
         setReadyPlayers([]);
+        setIsSpectating(false);
+        setActiveGameState(null);
         setGameState('SETUP');
         break;
 
       case 'STATE_CHANGE':
         const stateSender = onlinePlayersRef.current.find(p => p.id === _senderId);
         if (!isHost || stateSender?.isAdmin) {
-          setGameState(msg.state as GameState);
+          const targetState = msg.state as GameState;
+          if (isSpectatingRef.current) {
+            setActiveGameState(targetState);
+            if (targetState === 'REVEAL' || targetState === 'CLUES' || targetState === 'VOTING') {
+              break;
+            }
+          }
+          if (targetState === 'SETUP') {
+            setIsSpectating(false);
+            setActiveGameState(null);
+          }
+          setGameState(targetState);
+        }
+        break;
+
+      case 'GAME_IN_PROGRESS':
+        setIsSpectating(msg.isStarted);
+        if (msg.isStarted) {
+          setActiveGameState(msg.currentGameState as GameState);
+          showConfirm({
+            title: 'Game In Progress',
+            message: 'The room is already in a game. Please wait for the next match to start.',
+            confirmText: 'OK',
+            cancelText: '',
+            onConfirm: () => {}
+          });
         }
         break;
 
       case 'KICKED':
         leaveRoom();
         showConfirm({
-          title: 'Kicked from Room',
-          message: 'You have been kicked from the room by the host.',
+          title: msg.isBan ? 'Banned from Room' : 'Kicked from Room',
+          message: msg.isBan
+            ? `You have been permanently banned from this room.${msg.reason ? `\n\nReason: "${msg.reason}"` : ''} You cannot rejoin this session.`
+            : `You have been kicked from the room.${msg.reason ? `\n\nReason: "${msg.reason}"` : ''}`,
           confirmText: 'OK',
+          cancelText: '',
           onConfirm: () => {}
         });
         break;
 
+      case 'VOTE_INITIATED': {
+        triggerVoteNotificationLocal(msg.voteType, msg.targetId, msg.targetName, msg.initiatorId, msg.initiatorName);
+        break;
+      }
+
+      case 'GAME_PLAYERS_UPDATE':
+        if (!isHost) {
+          setPlayers(msg.players);
+          setPlayerOrder(msg.playerOrder);
+        }
+        break;
+
       case 'CHAT':
-        let appended = false;
         const cleanedMsgText = cleanText(msg.message.text);
         const processedMsg = {
           ...msg.message,
           text: cleanedMsgText
         };
-        setChatMessages(prev => {
-          if (prev.some(m => m.id === processedMsg.id)) return prev;
-
-          appended = true;
-          if (!isChatOpenRef.current && processedMsg.senderId !== myPlayerIdRef.current) {
-            setUnreadChatCount(c => c + 1);
-            playNotification();
-          } else if (processedMsg.senderId !== myPlayerIdRef.current) {
-            playNotification();
-          }
-
-          return [...prev, processedMsg];
-        });
-        if (isHost && appended) {
+        const isUnique = !chatMessagesRef.current.some(m => m.id === processedMsg.id);
+        const msgWithScope = appendChatMessage(processedMsg);
+        if (isHost && isUnique) {
           multiplayer.send({
             ...msg,
-            message: processedMsg
+            message: msgWithScope
           });
         }
         break;
@@ -1159,15 +1672,15 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
       id: `sys_${Date.now()}_${Math.random()}`,
       senderId: 'system',
       senderName: 'System',
-      senderAvatar: '🤖',
+      senderAvatar: 'system-info',
       text: `${cleanedName} joined the room.`,
       timestamp: Date.now(),
       isSystem: true
     };
-    setChatMessages(prev => [...prev, systemMsg]);
+    const msgWithScope = appendChatMessage(systemMsg);
     multiplayer.send({
       type: 'CHAT',
-      message: systemMsg
+      message: msgWithScope
     });
     // Show the join banner to the host and every other player, but not to the
     // joiner themselves (they already see the lobby they just entered). Mirrors
@@ -1178,9 +1691,63 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
       type: 'ROOM_NOTICE',
       text: joinNotice
     });
+
+    // Sync current settings to the newly joined player
+    multiplayer.sendTo(cleanedPlayer.id, {
+      type: 'SETTINGS_UPDATE',
+      difficulty,
+      selectedCategories,
+      impostorKnowsRole,
+      randomizeOrder,
+      hintsEnabled,
+      clueTimerLimit
+    });
+
+    // If game is in progress, notify the new player
+    if (gameStateRef.current !== 'SETUP') {
+      multiplayer.sendTo(cleanedPlayer.id, {
+        type: 'GAME_IN_PROGRESS',
+        isStarted: true,
+        currentGameState: gameStateRef.current
+      });
+    }
   };
 
   const handlePlayerDisconnected = (playerId: string) => {
+    // Clear votes cast by or against the disconnected player
+    setKickVotes(prev => {
+      const next: Record<string, string[]> = {};
+      Object.entries(prev).forEach(([targetId, voters]) => {
+        if (targetId !== playerId) {
+          next[targetId] = voters.filter(vId => vId !== playerId);
+        }
+      });
+      if (isHost) {
+        multiplayer.send({
+          type: 'VOTE_KICK_BAN_SYNC',
+          kickVotes: next,
+          banVotes: banVotesRef.current
+        });
+      }
+      return next;
+    });
+    setBanVotes(prev => {
+      const next: Record<string, string[]> = {};
+      Object.entries(prev).forEach(([targetId, voters]) => {
+        if (targetId !== playerId) {
+          next[targetId] = voters.filter(vId => vId !== playerId);
+        }
+      });
+      if (isHost) {
+        multiplayer.send({
+          type: 'VOTE_KICK_BAN_SYNC',
+          kickVotes: kickVotesRef.current,
+          banVotes: next
+        });
+      }
+      return next;
+    });
+
     const wasKicked = kickedPlayersRef.current.has(playerId);
     if (wasKicked) {
       kickedPlayersRef.current.delete(playerId);
@@ -1230,16 +1797,16 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
       id: `sys_${Date.now()}_${Math.random()}`,
       senderId: 'system',
       senderName: 'System',
-      senderAvatar: '🤖',
+      senderAvatar: 'system-info',
       text: `${disconnectedName} left the lobby.`,
       timestamp: Date.now(),
       isSystem: true
     };
-    setChatMessages(prev => [...prev, systemMsg]);
+    const msgWithScope = appendChatMessage(systemMsg);
     pushRoomNotice(`${disconnectedName} left the lobby.`);
     multiplayer.send({
       type: 'CHAT',
-      message: systemMsg
+      message: msgWithScope
     });
     multiplayer.send({
       type: 'ROOM_NOTICE',
@@ -1361,6 +1928,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setMultiplayerStatus('connected');
       return code;
     } catch (err) {
+      multiplayer.disconnect();
       setMultiplayerStatus('error');
       throw err;
     }
@@ -1402,6 +1970,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setMyPlayerId(multiplayer.myPeerId);
       setMultiplayerStatus('connected');
     } catch (err) {
+      multiplayer.disconnect();
       setMultiplayerStatus('error');
       throw err;
     }
@@ -1411,6 +1980,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
     // This client is leaving on purpose, so its own peer teardown must not
     // trigger the "Disconnected" modal.
     intentionalLeaveRef.current = true;
+    cleanupVoice();
     const wasMultiplayer = multiplayer.roomCode !== '';
     const wasHost = multiplayer.isHost;
 
@@ -1436,8 +2006,13 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setRoomCode('');
     setMyPlayerId('');
     setOnlinePlayers([]);
+    setPlayerPings({});
+    setKickVotes({});
+    setBanVotes({});
+    setSelectedModerationPlayer(null);
     setPlayersWhoRevealed([]);
     setReadyPlayers([]);
+    setIsSpectating(false);
     setMultiplayerStatus('idle');
     setGameState('HOME');
     setChatMessages([]);
@@ -1508,6 +2083,273 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
       impostorId: impostorId
     });
   };
+
+  const cleanupVoice = () => {
+    if (localStreamRef.current) {
+      localStreamRef.current.getTracks().forEach(t => t.stop());
+      localStreamRef.current = null;
+    }
+    if (audioContextRef.current) {
+      audioContextRef.current.close().catch(() => {});
+      audioContextRef.current = null;
+    }
+    gainNodeRef.current = null;
+    localDestinationStreamRef.current = null;
+
+    Object.values(activeCallsRef.current).forEach((call: any) => {
+      try { call.close(); } catch (e) {}
+    });
+    activeCallsRef.current = {};
+
+    Object.values(audioElementsRef.current).forEach((audio) => {
+      try { audio.pause(); audio.srcObject = null; audio.remove(); } catch (e) {}
+    });
+    audioElementsRef.current = {};
+
+    Object.values(voiceSpeakingDetectorsRef.current).forEach((detector) => {
+      clearInterval(detector.interval);
+    });
+    voiceSpeakingDetectorsRef.current = {};
+    
+    setPlayersSpeaking({});
+    setIsVoiceActive(false);
+  };
+
+  const handleRemoteCallStream = (call: any, peerId: string) => {
+    call.on('stream', (remoteStream: MediaStream) => {
+      let audio = audioElementsRef.current[peerId];
+      if (!audio) {
+        audio = new Audio();
+        audio.autoplay = true;
+        audioElementsRef.current[peerId] = audio;
+      }
+      audio.srcObject = remoteStream;
+      audio.volume = speakerVolume;
+      audio.play().catch((e: any) => console.warn("Audio autoplay blocked or failed:", e));
+
+      if (voiceSpeakingDetectorsRef.current[peerId]) {
+        clearInterval(voiceSpeakingDetectorsRef.current[peerId].interval);
+      }
+
+      try {
+        const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
+        const tempCtx = new AudioContextClass();
+        const src = tempCtx.createMediaStreamSource(remoteStream);
+        const analyser = tempCtx.createAnalyser();
+        analyser.fftSize = 512;
+        src.connect(analyser);
+
+        const bufferLength = analyser.frequencyBinCount;
+        const dataArray = new Uint8Array(bufferLength);
+
+        const interval = setInterval(() => {
+          analyser.getByteFrequencyData(dataArray);
+          let sum = 0;
+          for (let i = 0; i < bufferLength; i++) {
+            sum += dataArray[i] * dataArray[i];
+          }
+          const rms = Math.sqrt(sum / bufferLength) / 255;
+          const isSpeakingNow = rms > 0.03;
+
+          setPlayersSpeaking(prev => {
+            if (prev[peerId] === isSpeakingNow) return prev;
+            return { ...prev, [peerId]: isSpeakingNow };
+          });
+        }, 150);
+
+        voiceSpeakingDetectorsRef.current[peerId] = {
+          interval,
+          analyser
+        };
+      } catch (err) {
+        console.warn("Could not start volume analysis for player " + peerId, err);
+      }
+    });
+
+    call.on('close', () => {
+      cleanupRemotePeerCall(peerId);
+    });
+
+    call.on('error', () => {
+      cleanupRemotePeerCall(peerId);
+    });
+  };
+
+  const cleanupRemotePeerCall = (peerId: string) => {
+    if (activeCallsRef.current[peerId]) {
+      try { activeCallsRef.current[peerId].close(); } catch (e) {}
+      delete activeCallsRef.current[peerId];
+    }
+    const audio = audioElementsRef.current[peerId];
+    if (audio) {
+      try { audio.pause(); audio.srcObject = null; audio.remove(); } catch (e) {}
+      delete audioElementsRef.current[peerId];
+    }
+    const detector = voiceSpeakingDetectorsRef.current[peerId];
+    if (detector) {
+      clearInterval(detector.interval);
+      delete voiceSpeakingDetectorsRef.current[peerId];
+    }
+    setPlayersSpeaking(prev => {
+      if (prev[peerId] === undefined) return prev;
+      const next = { ...prev };
+      delete next[peerId];
+      return next;
+    });
+  };
+
+  const toggleVoice = async () => {
+    if (isVoiceActive) {
+      cleanupVoice();
+      if (isMultiplayer) {
+        multiplayer.send({
+          type: 'VOICE_TOGGLE',
+          active: false
+        });
+        if (isHost) {
+          setOnlinePlayers(prev => {
+            const next = prev.map(p => p.id === myPlayerId ? { ...p, isVoiceActive: false } : p);
+            multiplayer.send({
+              type: 'LOBBY_UPDATE',
+              players: next
+            });
+            return next;
+          });
+        }
+      }
+    } else {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+        
+        const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
+        const ctx = new AudioContextClass();
+        const source = ctx.createMediaStreamSource(stream);
+        const gainNode = ctx.createGain();
+        gainNode.gain.value = micVolume;
+        const dest = ctx.createMediaStreamDestination();
+        
+        source.connect(gainNode);
+        gainNode.connect(dest);
+
+        localStreamRef.current = stream;
+        audioContextRef.current = ctx;
+        gainNodeRef.current = gainNode;
+        localDestinationStreamRef.current = dest.stream;
+        
+        setIsVoiceActive(true);
+
+        if (isMultiplayer) {
+          multiplayer.send({
+            type: 'VOICE_TOGGLE',
+            active: true
+          });
+          if (isHost) {
+            setOnlinePlayers(prev => {
+              const next = prev.map(p => p.id === myPlayerId ? { ...p, isVoiceActive: true } : p);
+              multiplayer.send({
+                type: 'LOBBY_UPDATE',
+                players: next
+              });
+              return next;
+            });
+          }
+        }
+      } catch (err) {
+        console.error('Failed to access microphone for voice chat:', err);
+        showConfirm({
+          title: 'Microphone Access Denied',
+          message: 'Unable to access your microphone. Please check your browser permissions for this site and try again.',
+          confirmText: 'OK',
+          onConfirm: () => {}
+        });
+      }
+    }
+  };
+
+  // Listen for incoming voice calls
+  useEffect(() => {
+    const peer = multiplayer.getPeer();
+    if (!peer) return;
+
+    const handleCall = (call: any) => {
+      if (!isVoiceActive || !localDestinationStreamRef.current) {
+        try {
+          const emptyCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
+          const emptyDest = emptyCtx.createMediaStreamDestination();
+          call.answer(emptyDest.stream);
+          setTimeout(() => call.close(), 100);
+        } catch (e) {
+          call.answer();
+        }
+        return;
+      }
+
+      call.answer(localDestinationStreamRef.current);
+      activeCallsRef.current[call.peer] = call;
+      handleRemoteCallStream(call, call.peer);
+    };
+
+    peer.on('call', handleCall);
+    return () => {
+      peer.off('call', handleCall);
+    };
+  }, [isVoiceActive, multiplayerStatus]);
+
+  // Check player voice scopes and manage direct WebRTC calls
+  useEffect(() => {
+    if (!isVoiceActive || !isMultiplayer) {
+      if (!isVoiceActive) {
+        Object.keys(activeCallsRef.current).forEach(peerId => {
+          cleanupRemotePeerCall(peerId);
+        });
+      }
+      return;
+    }
+
+    const peer = multiplayer.getPeer();
+    if (!peer) return;
+
+    const getPlayerVoiceScope = (playerId: string) => {
+      const p = onlinePlayers.find(pl => pl.id === playerId);
+      if (!p) return 'lobby';
+      const gameActive = gameState !== 'SETUP' && gameState !== 'HOME';
+      if (gameActive && p.isSpectating) return 'lobby';
+      if (gameActive && !p.isSpectating) return 'game';
+      return 'lobby';
+    };
+
+    const myScope = getPlayerVoiceScope(myPlayerId);
+
+    Object.keys(activeCallsRef.current).forEach(peerId => {
+      const p = onlinePlayers.find(pl => pl.id === peerId);
+      const targetScope = getPlayerVoiceScope(peerId);
+      
+      const shouldDisconnect = !p || !p.isVoiceActive || targetScope !== myScope;
+      if (shouldDisconnect) {
+        cleanupRemotePeerCall(peerId);
+      }
+    });
+
+    if (localDestinationStreamRef.current) {
+      onlinePlayers.forEach(p => {
+        if (p.id === myPlayerId) return;
+        if (!p.isVoiceActive) return;
+
+        const targetScope = getPlayerVoiceScope(p.id);
+        if (targetScope === myScope && myPlayerId < p.id) {
+          if (!activeCallsRef.current[p.id]) {
+            try {
+              const call = peer.call(p.id, localDestinationStreamRef.current!);
+              activeCallsRef.current[p.id] = call;
+              handleRemoteCallStream(call, p.id);
+            } catch (err) {
+              console.warn("Failed to call peer " + p.id, err);
+            }
+          }
+        }
+      });
+    }
+  }, [isVoiceActive, onlinePlayers, gameState, isSpectating, isMultiplayer, myPlayerId]);
 
   // Confirm Modal state
   const [confirmConfig, setConfirmConfig] = useState<GameContextType['confirmConfig']>(null);
@@ -1659,6 +2501,9 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setCurrentVoterIndex(0);
       setVotes({});
 
+      const startTimestamp = Date.now();
+      setGameStartedAt(startTimestamp);
+
       // Broadcast start signal to guests
       onlinePlayers.forEach((op) => {
         const gp = gamePlayers.find((p) => p.id === op.id)!;
@@ -1674,7 +2519,8 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
             impostorWord: pair.impostor,
             chosenCategory: cat,
             activeWordPairHints: pair.hints || [],
-            activePlayerVisualAid: visualAid
+            activePlayerVisualAid: visualAid,
+            gameStartedAt: startTimestamp
           });
         }
       });
@@ -1746,15 +2592,19 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (isHost) {
         setPlayersWhoRevealed(prev => {
           const next = prev.includes(myPlayerId) ? prev : [...prev, myPlayerId];
+          multiplayer.send({
+            type: 'REVEAL_PROGRESS',
+            revealedPlayers: next
+          });
           if (next.length === onlinePlayers.length) {
             setGameState('CLUES');
-            setTimerSeconds(30);
+            setTimerSeconds(clueTimerLimit);
             setTimerActive(false);
             setActiveClueIndex(0);
             multiplayer.send({
               type: 'TIMER_SYNC',
               activeClueIndex: 0,
-              timerSeconds: 30,
+              timerSeconds: clueTimerLimit,
               timerActive: false
             });
           }
@@ -1766,6 +2616,8 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setCurrentRevealIndex(prev => prev + 1);
       } else {
         setGameState('CLUES');
+        setTimerSeconds(clueTimerLimit);
+        setTimerActive(false);
       }
     }
   };
@@ -1879,6 +2731,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setWinner(null);
         setVoteStats({});
         setReadyPlayers([]);
+        setIsSpectating(false);
         setGameState('SETUP');
         multiplayer.send({
           type: 'PLAY_AGAIN'
@@ -1921,6 +2774,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
     // (the modal only appeared on a refresh, which destroys the peer on unload).
     // Host: destroy the peer immediately so guests get the "Disconnected" modal,
     // exactly like a refresh. Guest: notify the host it left.
+    cleanupVoice();
     if (multiplayer.roomCode !== '') {
       leaveRoom(multiplayer.isHost);
     }
@@ -1940,6 +2794,8 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setWinner(null);
     setVoteStats({});
     setReadyPlayers([]);
+    setIsSpectating(false);
+    setActiveGameState(null);
     setGameState('HOME');
     setChatMessages([]);
     setIsChatOpen(false);
@@ -2027,6 +2883,9 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
         onlinePlayers,
         playersWhoRevealed,
         readyPlayers,
+        isSpectating,
+        activeGameState,
+        gameStartedAt,
         setPlayerReady,
         activeClueIndex,
         setActiveClueIndex,
@@ -2034,6 +2893,8 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setTimerSeconds,
         timerActive,
         setTimerActive,
+        clueTimerLimit,
+        setClueTimerLimit,
         hostRoom,
         joinRoom,
         leaveRoom,
@@ -2051,7 +2912,23 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
         banPlayer,
         transferHost,
         updatePlayerName,
+        playerPings,
+        kickVotes,
+        banVotes,
+        voteToKickPlayer,
+        voteToBanPlayer,
+        selectedModerationPlayer,
+        setSelectedModerationPlayer,
         roomNotice,
+        voteNotification,
+        dismissVoteNotification,
+        isVoiceActive,
+        toggleVoice,
+        micVolume,
+        setMicVolume,
+        speakerVolume,
+        setSpeakerVolume,
+        playersSpeaking,
       }}
     >
       {children}

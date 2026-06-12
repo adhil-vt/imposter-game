@@ -4,7 +4,8 @@ import { Button } from '../components/Button';
 import { RevealCard } from '../components/RevealCard';
 import { Card } from '../components/Card';
 import { ChatDrawer } from '../components/ChatDrawer';
-import { ArrowRight, Eye, Sparkles } from 'lucide-react';
+import { ArrowRight, Eye, Sparkles, Wifi, Flag } from 'lucide-react';
+import { playClick } from '../utils/sounds';
 
 export const RevealPage: React.FC = () => {
   const {
@@ -21,7 +22,14 @@ export const RevealPage: React.FC = () => {
     hintsEnabled,
     isMultiplayer,
     myPlayerId,
-    playersWhoRevealed
+    playersWhoRevealed,
+    isLobbyAdmin,
+    lobbyAdminId,
+    setSelectedModerationPlayer,
+    onlinePlayers,
+    playerPings,
+    roomCode,
+    isHost
   } = useGame();
 
   // State to handle the "Pass device to Y" intermediary step (offline only)
@@ -36,6 +44,97 @@ export const RevealPage: React.FC = () => {
   const nextPlayer = isMultiplayer ? null : players.find(p => p.id === nextPlayerId);
 
   if (!activePlayer) return null;
+
+  const renderPlayerRoster = () => {
+    if (!isMultiplayer) return null;
+
+    return (
+      <Card className="p-5 border-white/5 bg-brand-card/40 text-left mt-4 animate-scale-in">
+        <h4 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-3">
+          Room Players
+        </h4>
+        <div className="flex flex-col gap-2 max-h-[160px] overflow-y-auto pr-1">
+          {players.map((player) => {
+            const isMe = player.id === myPlayerId;
+            const isFinished = playersWhoRevealed.includes(player.id);
+            
+            return (
+              <div
+                key={player.id}
+                className="flex items-center justify-between p-3 rounded-xl border border-white/5 bg-white/[0.02] text-slate-300"
+              >
+                <div className="flex items-center gap-2.5">
+                  <span className="text-base">{player.avatar}</span>
+                  <span className="text-sm font-bold">{player.name}</span>
+                  {isMe && (
+                    <span className="text-[9px] px-1.5 py-0.5 rounded bg-white/10 text-slate-400 font-bold uppercase tracking-wider">
+                      You
+                    </span>
+                  )}
+                </div>
+
+                <div className="flex items-center gap-2 select-none">
+                  {/* Network Latency Ping Indicator */}
+                  {(() => {
+                    const op = onlinePlayers.find(p => p.id === player.id);
+                    const isHostPlayer = op ? (op.isHost || op.isAdmin) : false;
+                    const pingVal = isHostPlayer
+                      ? (isHost ? 0 : playerPings[`imposter-${roomCode}`])
+                      : playerPings[player.id];
+                    
+                    if (pingVal === undefined) return null;
+                    
+                    let badgeColor = 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20';
+                    if (pingVal > 150) {
+                      badgeColor = 'text-rose-400 bg-rose-500/10 border-rose-500/20';
+                    } else if (pingVal > 80) {
+                      badgeColor = 'text-amber-400 bg-amber-500/10 border-amber-500/20';
+                    }
+                    
+                    return (
+                      <span className={`text-[9px] border px-1.5 py-0.5 rounded-full font-black flex items-center gap-0.5 leading-none shrink-0 ${badgeColor}`} title="Network Latency">
+                        <Wifi className="w-2.5 h-2.5 shrink-0" />
+                        {pingVal === 0 ? 'Local' : `${pingVal}ms`}
+                      </span>
+                    );
+                  })()}
+
+                  {/* Ready/Finished viewing card Indicator */}
+                  {isFinished ? (
+                    <span className="text-[9px] border border-brand-accent/20 bg-brand-accent/10 text-brand-accent px-1.5 py-0.5 rounded-full font-bold uppercase tracking-wider">
+                      Ready
+                    </span>
+                  ) : (
+                    <span className="text-[9px] border border-white/10 bg-white/5 text-slate-500 px-1.5 py-0.5 rounded-full font-bold uppercase tracking-wider animate-pulse">
+                      Viewing
+                    </span>
+                  )}
+
+                  {/* Report button */}
+                  {!isMe && (isLobbyAdmin || player.id !== lobbyAdminId) && (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        playClick();
+                        const targetOp = onlinePlayers.find(op => op.id === player.id);
+                        if (targetOp) {
+                          setSelectedModerationPlayer(targetOp);
+                        }
+                      }}
+                      className="group p-1 rounded-lg bg-rose-500/10 border border-rose-500/20 text-rose-400 hover:bg-rose-500/25 hover:border-rose-500/50 hover:text-rose-300 hover:shadow-[0_0_6px_rgba(244,63,94,0.25)] transition-all duration-200 cursor-pointer"
+                      title="Report Player"
+                    >
+                      <Flag className="w-3.5 h-3.5 group-hover:scale-110 transition-transform duration-150" />
+                    </button>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </Card>
+    );
+  };
 
   const handleHideWord = () => {
     hideWord();
@@ -79,6 +178,7 @@ export const RevealPage: React.FC = () => {
                 Progress: {playersWhoRevealed.length} / {players.length} Ready
               </div>
             </Card>
+            {renderPlayerRoster()}
           </div>
         </div>
 
@@ -194,6 +294,7 @@ export const RevealPage: React.FC = () => {
               </Button>
             )}
           </div>
+          {renderPlayerRoster()}
         </div>
       </div>
 

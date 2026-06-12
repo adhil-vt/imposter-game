@@ -1,7 +1,8 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useGame } from '../context/GameContext';
-import { MessageSquare, Send, X, Users } from 'lucide-react';
+import { MessageSquare, Send, X, Users, Mic, MicOff, Volume2, Radio } from 'lucide-react';
 import { playClick } from '../utils/sounds';
+import { renderAvatarIcon } from '../utils/avatarHelper';
 
 interface ChatDrawerProps {
   embedded?: boolean;
@@ -27,9 +28,19 @@ export const ChatDrawer: React.FC<ChatDrawerProps> = ({ embedded = false }) => {
     unreadChatCount,
     sendChatMessage,
     mutedPlayerIds,
+    isSpectating,
+    gameStartedAt,
+    isVoiceActive,
+    toggleVoice,
+    micVolume,
+    setMicVolume,
+    speakerVolume,
+    setSpeakerVolume,
+    playersSpeaking,
   } = useGame();
 
   const [inputText, setInputText] = useState('');
+  const [activeTab, setActiveTab] = useState<'chat' | 'voice'>('chat');
   const [isMobileViewport, setIsMobileViewport] = useState(false);
   const [mobileToast, setMobileToast] = useState<ToastMessage | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -73,6 +84,16 @@ export const ChatDrawer: React.FC<ChatDrawerProps> = ({ embedded = false }) => {
     if (!latestMessage || latestMessage.id === lastMessageIdRef.current) return;
     lastMessageIdRef.current = latestMessage.id;
 
+    const isMessageVisible = (() => {
+      if (isSpectating) {
+        return !latestMessage.chatScope || latestMessage.chatScope === 'lobby';
+      } else {
+        return latestMessage.chatScope === 'game' || latestMessage.timestamp < gameStartedAt;
+      }
+    })();
+
+    if (!isMessageVisible) return;
+
     if (embedded || isChatOpen) {
       scrollToBottom('smooth');
     }
@@ -93,7 +114,7 @@ export const ChatDrawer: React.FC<ChatDrawerProps> = ({ embedded = false }) => {
         setMobileToast(null);
       }, 3500);
     }
-  }, [chatMessages, embedded, isChatOpen, isMobileViewport, myPlayerId]);
+  }, [chatMessages, embedded, isChatOpen, isMobileViewport, myPlayerId, isSpectating, gameStartedAt]);
 
   useEffect(() => {
     return () => {
@@ -127,7 +148,14 @@ export const ChatDrawer: React.FC<ChatDrawerProps> = ({ embedded = false }) => {
   };
 
   const renderMessages = () => {
-    const visibleMessages = chatMessages.filter(msg => !mutedPlayerIds.includes(msg.senderId));
+    const visibleMessages = chatMessages.filter(msg => {
+      if (mutedPlayerIds.includes(msg.senderId)) return false;
+      if (isSpectating) {
+        return !msg.chatScope || msg.chatScope === 'lobby';
+      } else {
+        return msg.chatScope === 'game' || msg.timestamp < gameStartedAt;
+      }
+    });
 
     if (visibleMessages.length === 0) {
       return (
@@ -161,7 +189,7 @@ export const ChatDrawer: React.FC<ChatDrawerProps> = ({ embedded = false }) => {
           }`}
         >
           <span className="w-7.5 h-7.5 rounded-lg bg-white/5 border border-white/10 flex items-center justify-center text-sm shadow-sm select-none shrink-0 self-end">
-            {msg.senderAvatar}
+            {renderAvatarIcon(msg.senderAvatar)}
           </span>
 
           <div className={`flex flex-col min-w-0 ${isMe ? 'items-end' : 'items-start'}`}>
@@ -184,6 +212,156 @@ export const ChatDrawer: React.FC<ChatDrawerProps> = ({ embedded = false }) => {
         </div>
       );
     });
+  };
+
+  const renderVoicePanel = () => {
+    return (
+      <div className="flex-1 flex flex-col min-h-0 overflow-y-auto p-5 gap-5 custom-scrollbar bg-brand-dark/10">
+        
+        {/* Join/Leave Button */}
+        <div className="flex flex-col gap-2">
+          <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest block">
+            Channel Status
+          </span>
+          <button
+            onClick={() => toggleVoice()}
+            className={`w-full py-3.5 rounded-2xl text-xs font-extrabold flex items-center justify-center gap-2 cursor-pointer shadow-md transition-all active:scale-98 ${
+              isVoiceActive
+                ? 'bg-rose-500/10 border border-rose-500/30 text-rose-400 hover:bg-rose-500/20 hover:border-rose-500/40 shadow-rose-500/5'
+                : 'bg-brand-primary border border-brand-primary text-white hover:scale-[1.01] shadow-brand-primary/10'
+            }`}
+          >
+            {isVoiceActive ? (
+              <>
+                <MicOff className="w-4 h-4" />
+                Disconnect Voice Chat
+              </>
+            ) : (
+              <>
+                <Mic className="w-4 h-4 animate-pulse" />
+                Connect Voice Chat
+              </>
+            )}
+          </button>
+        </div>
+
+        {isVoiceActive && (
+          <>
+            {/* Input & Output Sliders */}
+            <div className="flex flex-col gap-4 bg-white/[0.01] border border-white/5 p-4 rounded-2xl">
+              {/* Mic Volume */}
+              <div className="flex flex-col gap-1.5">
+                <div className="flex items-center justify-between text-xs select-none">
+                  <span className="font-bold text-slate-300 flex items-center gap-1.5">
+                    <Mic className="w-3.5 h-3.5 text-brand-primary" />
+                    Microphone Gain
+                  </span>
+                  <span className="font-extrabold text-[10px] text-slate-500">
+                    {Math.round(micVolume * 100)}%
+                  </span>
+                </div>
+                <input
+                  type="range"
+                  min="0"
+                  max="1.5"
+                  step="0.05"
+                  value={micVolume}
+                  onChange={(e) => setMicVolume(parseFloat(e.target.value))}
+                  className="w-full accent-brand-primary bg-white/5 h-1.5 rounded-lg appearance-none cursor-pointer"
+                />
+              </div>
+
+              {/* Speaker Volume */}
+              <div className="flex flex-col gap-1.5">
+                <div className="flex items-center justify-between text-xs select-none">
+                  <span className="font-bold text-slate-300 flex items-center gap-1.5">
+                    <Volume2 className="w-3.5 h-3.5 text-brand-secondary" />
+                    Speaker Volume
+                  </span>
+                  <span className="font-extrabold text-[10px] text-slate-500">
+                    {Math.round(speakerVolume * 100)}%
+                  </span>
+                </div>
+                <input
+                  type="range"
+                  min="0"
+                  max="1"
+                  step="0.05"
+                  value={speakerVolume}
+                  onChange={(e) => setSpeakerVolume(parseFloat(e.target.value))}
+                  className="w-full accent-brand-secondary bg-white/5 h-1.5 rounded-lg appearance-none cursor-pointer"
+                />
+              </div>
+            </div>
+
+            {/* Active Voice Speakers */}
+            <div className="flex flex-col gap-2.5">
+              <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest block select-none">
+                Active in Channel
+              </span>
+              <div className="flex flex-col gap-2">
+                {onlinePlayers.map((player) => {
+                  const isMe = player.id === myPlayerId;
+                  const isSpeaking = isMe ? false : !!playersSpeaking[player.id];
+                  
+                  return (
+                    <div
+                      key={player.id}
+                      className="flex items-center justify-between p-3 rounded-xl bg-white/[0.01] border border-white/5 select-none"
+                    >
+                      <div className="flex items-center gap-2.5 min-w-0">
+                        {/* Glowing Avatar */}
+                        <div className={`relative transition-shadow duration-300 w-8 h-8 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center text-base shrink-0 ${
+                          isSpeaking ? 'ring-2 ring-emerald-400 shadow-[0_0_10px_rgba(52,211,153,0.3)] animate-pulse' : ''
+                        }`}>
+                          {player.avatar}
+                        </div>
+                        <span className="text-xs font-bold text-slate-200 truncate">
+                          {player.name}
+                          {isMe && <span className="text-[9px] text-slate-500 font-bold ml-1 italic">(You)</span>}
+                        </span>
+                      </div>
+                      
+                      <div className="flex items-center gap-2">
+                        {player.isVoiceActive ? (
+                          isSpeaking ? (
+                            <span className="text-[9px] bg-emerald-400/10 border border-emerald-500/25 text-emerald-400 px-2 py-0.5 rounded font-black uppercase tracking-wider flex items-center gap-0.5 animate-pulse">
+                              <Radio className="w-2.5 h-2.5 shrink-0" />
+                              Speaking
+                            </span>
+                          ) : (
+                            <span className="text-[9px] bg-white/5 border border-white/10 text-slate-400 px-2 py-0.5 rounded font-black uppercase tracking-wider flex items-center gap-0.5">
+                              <Mic className="w-2.5 h-2.5 shrink-0 text-slate-500" />
+                              Active
+                            </span>
+                          )
+                        ) : (
+                          <span className="text-[9px] bg-white/[0.01] border border-dashed border-white/5 text-slate-600 px-2 py-0.5 rounded font-bold uppercase tracking-wider flex items-center gap-0.5">
+                            <MicOff className="w-2.5 h-2.5 shrink-0 text-slate-700" />
+                            Offline
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          </>
+        )}
+        
+        {!isVoiceActive && (
+          <div className="flex-1 flex flex-col items-center justify-center text-center opacity-40 p-4 select-none h-full mt-8">
+            <Radio className="w-10 h-10 text-slate-500 mb-2 stroke-[1.5] animate-pulse" />
+            <span className="text-xs font-bold text-slate-400">Voice Chat is Offline</span>
+            <span className="text-[10px] text-slate-500 mt-1 max-w-[200px] leading-relaxed">
+              Connect to chat with other lobby members in real-time over P2P!
+            </span>
+          </div>
+        )}
+
+      </div>
+    );
   };
 
   const renderInput = () => {
@@ -219,7 +397,7 @@ export const ChatDrawer: React.FC<ChatDrawerProps> = ({ embedded = false }) => {
   if (embedded) {
     return (
       <div className="glass-panel border-white/5 bg-brand-card/45 flex flex-col h-[calc(100vh-8rem)] min-h-0 overflow-hidden">
-        <div className="p-4 border-b border-white/5 bg-brand-dark/20 flex justify-between items-center select-none">
+        <div className="p-4 border-b border-white/5 bg-brand-dark/20 flex justify-between items-center select-none shrink-0">
           <div className="flex flex-col">
             <span className="text-sm font-black text-white tracking-wide flex items-center gap-1.5">
               <MessageSquare className="w-4 h-4 text-brand-primary" />
@@ -232,15 +410,54 @@ export const ChatDrawer: React.FC<ChatDrawerProps> = ({ embedded = false }) => {
           </div>
         </div>
 
-        <div
-          ref={messagesContainerRef}
-          className="flex-1 min-h-0 overflow-y-auto p-4 flex flex-col gap-4 custom-scrollbar"
-        >
-          {renderMessages()}
-          <div ref={messagesEndRef} />
+        {/* Tab Headers */}
+        <div className="flex border-b border-white/5 bg-brand-dark/10 shrink-0 select-none">
+          <button
+            onClick={() => { playClick(); setActiveTab('chat'); }}
+            className={`flex-1 py-3 text-xs font-bold flex items-center justify-center gap-1.5 border-b-2 transition-all cursor-pointer ${
+              activeTab === 'chat'
+                ? 'border-brand-primary text-white bg-white/[0.02]'
+                : 'border-transparent text-slate-500 hover:text-slate-300'
+            }`}
+          >
+            <MessageSquare className="w-3.5 h-3.5" />
+            Text Chat
+            {unreadChatCount > 0 && activeTab !== 'chat' && (
+              <span className="bg-brand-danger text-white text-[9px] font-black w-4.5 h-4.5 rounded-full flex items-center justify-center animate-pulse">
+                {unreadChatCount}
+              </span>
+            )}
+          </button>
+          <button
+            onClick={() => { playClick(); setActiveTab('voice'); }}
+            className={`flex-1 py-3 text-xs font-bold flex items-center justify-center gap-1.5 border-b-2 transition-all cursor-pointer ${
+              activeTab === 'voice'
+                ? 'border-brand-primary text-white bg-white/[0.02]'
+                : 'border-transparent text-slate-500 hover:text-slate-300'
+            }`}
+          >
+            <Radio className="w-3.5 h-3.5" />
+            Voice Chat
+            {isVoiceActive && (
+              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
+            )}
+          </button>
         </div>
 
-        {renderInput()}
+        {activeTab === 'chat' ? (
+          <>
+            <div
+              ref={messagesContainerRef}
+              className="flex-1 min-h-0 overflow-y-auto p-4 flex flex-col gap-4 custom-scrollbar"
+            >
+              {renderMessages()}
+              <div ref={messagesEndRef} />
+            </div>
+            {renderInput()}
+          </>
+        ) : (
+          renderVoicePanel()
+        )}
       </div>
     );
   }
@@ -251,7 +468,7 @@ export const ChatDrawer: React.FC<ChatDrawerProps> = ({ embedded = false }) => {
         <div className="fixed bottom-24 right-4 left-4 sm:left-auto sm:w-[22rem] z-50 animate-fade-in-up pointer-events-none">
           <div className="glass-panel border-white/10 bg-brand-dark/95 shadow-2xl px-4 py-3 flex items-start gap-3">
             <span className="w-9 h-9 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center text-lg shrink-0">
-              {mobileToast.senderAvatar}
+              {renderAvatarIcon(mobileToast.senderAvatar)}
             </span>
             <div className="min-w-0 flex-1 text-left">
               <div className="flex items-center justify-between gap-3">
@@ -309,15 +526,54 @@ export const ChatDrawer: React.FC<ChatDrawerProps> = ({ embedded = false }) => {
           </button>
         </div>
 
-        <div
-          ref={messagesContainerRef}
-          className="flex-1 min-h-0 overflow-y-auto p-4 flex flex-col gap-4 custom-scrollbar"
-        >
-          {renderMessages()}
-          <div ref={messagesEndRef} />
+        {/* Tab Headers */}
+        <div className="flex border-b border-white/5 bg-brand-dark/10 shrink-0 select-none">
+          <button
+            onClick={() => { playClick(); setActiveTab('chat'); }}
+            className={`flex-1 py-3 text-xs font-bold flex items-center justify-center gap-1.5 border-b-2 transition-all cursor-pointer ${
+              activeTab === 'chat'
+                ? 'border-brand-primary text-white bg-white/[0.02]'
+                : 'border-transparent text-slate-500 hover:text-slate-300'
+            }`}
+          >
+            <MessageSquare className="w-3.5 h-3.5" />
+            Text Chat
+            {unreadChatCount > 0 && activeTab !== 'chat' && (
+              <span className="bg-brand-danger text-white text-[9px] font-black w-4.5 h-4.5 rounded-full flex items-center justify-center animate-pulse">
+                {unreadChatCount}
+              </span>
+            )}
+          </button>
+          <button
+            onClick={() => { playClick(); setActiveTab('voice'); }}
+            className={`flex-1 py-3 text-xs font-bold flex items-center justify-center gap-1.5 border-b-2 transition-all cursor-pointer ${
+              activeTab === 'voice'
+                ? 'border-brand-primary text-white bg-white/[0.02]'
+                : 'border-transparent text-slate-500 hover:text-slate-300'
+            }`}
+          >
+            <Radio className="w-3.5 h-3.5" />
+            Voice Chat
+            {isVoiceActive && (
+              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
+            )}
+          </button>
         </div>
 
-        {renderInput()}
+        {activeTab === 'chat' ? (
+          <>
+            <div
+              ref={messagesContainerRef}
+              className="flex-1 min-h-0 overflow-y-auto p-4 flex flex-col gap-4 custom-scrollbar"
+            >
+              {renderMessages()}
+              <div ref={messagesEndRef} />
+            </div>
+            {renderInput()}
+          </>
+        ) : (
+          renderVoicePanel()
+        )}
       </div>
     </>
   );

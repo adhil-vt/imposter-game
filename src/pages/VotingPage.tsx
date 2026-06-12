@@ -2,7 +2,7 @@ import React from 'react';
 import { useGame } from '../context/GameContext';
 import { Card } from '../components/Card';
 import { playClick } from '../utils/sounds';
-import { UserCheck } from 'lucide-react';
+import { UserCheck, Wifi, Flag } from 'lucide-react';
 
 export const VotingPage: React.FC = () => {
   const {
@@ -15,6 +15,11 @@ export const VotingPage: React.FC = () => {
     myPlayerId,
     votes,
     onlinePlayers,
+    playerPings,
+    roomCode,
+    isHost,
+    lobbyAdminId,
+    setSelectedModerationPlayer,
   } = useGame();
 
   const voterId = isMultiplayer ? myPlayerId : playerOrder[currentVoterIndex];
@@ -99,8 +104,50 @@ export const VotingPage: React.FC = () => {
                   <span>{candidate.name}</span>
                 </div>
 
-                <div className="w-5 h-5 rounded-full border border-white/20 hover:border-brand-primary flex items-center justify-center">
-                  <span className="w-2.5 h-2.5 rounded-full bg-transparent hover:bg-brand-primary/30" />
+                <div className="flex items-center gap-2 select-none">
+                  {isMultiplayer && candidate.id !== myPlayerId && (isLobbyAdmin || candidate.id !== lobbyAdminId) && (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        playClick();
+                        const targetOp = onlinePlayers.find(p => p.id === candidate.id);
+                        if (targetOp) {
+                          setSelectedModerationPlayer(targetOp);
+                        }
+                      }}
+                      className="group p-1 rounded-lg bg-rose-500/10 border border-rose-500/20 text-rose-400 hover:bg-rose-500/25 hover:border-rose-500/50 hover:text-rose-300 hover:shadow-[0_0_6px_rgba(244,63,94,0.25)] transition-all duration-200 cursor-pointer"
+                      title="Report Suspect"
+                    >
+                      <Flag className="w-3.5 h-3.5 group-hover:scale-110 transition-transform duration-150" />
+                    </button>
+                  )}
+                  {isMultiplayer && (() => {
+                    const op = onlinePlayers.find(p => p.id === candidate.id);
+                    const isHostPlayer = op ? (op.isHost || op.isAdmin) : false;
+                    const pingVal = isHostPlayer
+                      ? (isHost ? 0 : playerPings[`imposter-${roomCode}`])
+                      : playerPings[candidate.id];
+                    
+                    if (pingVal === undefined) return null;
+                    
+                    let badgeColor = 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20';
+                    if (pingVal > 150) {
+                      badgeColor = 'text-rose-400 bg-rose-500/10 border-rose-500/20';
+                    } else if (pingVal > 80) {
+                      badgeColor = 'text-amber-400 bg-amber-500/10 border-amber-500/20';
+                    }
+                    
+                    return (
+                      <span className={`text-[9px] border px-1.5 py-0.5 rounded-full font-black flex items-center gap-0.5 leading-none shrink-0 ${badgeColor}`} title="Network Latency">
+                        <Wifi className="w-2.5 h-2.5 shrink-0" />
+                        {pingVal === 0 ? 'Local' : `${pingVal}ms`}
+                      </span>
+                    );
+                  })()}
+
+                  <div className="w-5 h-5 rounded-full border border-white/20 hover:border-brand-primary flex items-center justify-center shrink-0">
+                    <span className="w-2.5 h-2.5 rounded-full bg-transparent hover:bg-brand-primary/30" />
+                  </div>
                 </div>
               </button>
             ))}

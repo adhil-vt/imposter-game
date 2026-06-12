@@ -3,7 +3,7 @@ import { useGame, AVATAR_POOL } from '../context/GameContext';
 import { Button } from '../components/Button';
 import { Card } from '../components/Card';
 import { playClick } from '../utils/sounds';
-import { PlayerModerationModal } from '../components/PlayerModerationModal';
+import { renderAvatarIcon } from '../utils/avatarHelper';
 import type { CategoryKey, DifficultyKey } from '../data/words';
 import { 
   Users, 
@@ -12,10 +12,12 @@ import {
   Coffee, 
   Globe, 
   UserPlus,
+  UserMinus,
   Play,
   RotateCcw,
   Volume2,
   VolumeX,
+  Clock,
   Eye,
   EyeOff,
   Settings,
@@ -41,7 +43,13 @@ import {
   Copy,
   Send,
   MessageSquare,
-  Pencil
+  Pencil,
+  Wifi,
+  ShieldAlert,
+  Shield,
+  MoreVertical,
+  X,
+  Mic
 } from 'lucide-react';
 
 export const CreateGamePage: React.FC = () => {
@@ -64,6 +72,8 @@ export const CreateGamePage: React.FC = () => {
     setSoundEnabled,
     hintsEnabled,
     setHintsEnabled,
+    clueTimerLimit,
+    setClueTimerLimit,
     customWordPairs,
     addCustomWordPair,
     deleteCustomWordPair,
@@ -71,9 +81,14 @@ export const CreateGamePage: React.FC = () => {
     resetGame,
     isMultiplayer,
     isHost,
+    isSpectating,
+    activeGameState,
     roomCode,
     myPlayerId,
     onlinePlayers,
+    playerPings,
+    kickVotes,
+    banVotes,
     leaveRoom,
     isLobbyAdmin,
     mutedPlayerIds,
@@ -81,7 +96,13 @@ export const CreateGamePage: React.FC = () => {
     sendChatMessage,
     unreadChatCount,
     setUnreadChatCount,
-    updatePlayerName
+    updatePlayerName,
+    kickPlayer,
+    banPlayer,
+    lobbyAdminId,
+    toggleMutePlayer,
+    transferHost,
+    playersSpeaking,
   } = useGame();
 
   const [copied, setCopied] = useState(false);
@@ -90,8 +111,17 @@ export const CreateGamePage: React.FC = () => {
   const [newCommonWord, setNewCommonWord] = useState<string>('');
   const [newImpostorWord, setNewImpostorWord] = useState<string>('');
   const [customWordError, setCustomWordError] = useState<string>('');
-  
-  const [selectedModerationPlayer, setSelectedModerationPlayer] = useState<any | null>(null);
+  const [customInputVal, setCustomInputVal] = useState<string>(String(clueTimerLimit));
+
+  // Host lobby moderation state
+  type HostActionMode = 'menu' | 'kick' | 'ban';
+  const [hostActionTarget, setHostActionTarget] = useState<{ id: string; name: string; avatar: string } | null>(null);
+  const [hostActionMode, setHostActionMode] = useState<HostActionMode>('menu');
+  const [hostActionReason, setHostActionReason] = useState<string>('');
+
+  useEffect(() => {
+    setCustomInputVal(String(clueTimerLimit));
+  }, [clueTimerLimit]);
   const [chatInput, setChatInput] = useState('');
   const [isEditingName, setIsEditingName] = useState(false);
   const [editingNameVal, setEditingNameVal] = useState('');
@@ -198,6 +228,46 @@ export const CreateGamePage: React.FC = () => {
 
   const isCustomCategoryEmpty = selectedCategories.includes('Custom') && selectedCategories.length === 1 && customWordPairs.length === 0;
 
+  const getActiveGameStatus = () => {
+    switch (activeGameState) {
+      case 'REVEAL':
+        return {
+          title: 'Reveal Phase',
+          desc: 'Players are currently checking their secret words. Keep it quiet!',
+          icon: <Eye className="w-5 h-5 text-brand-primary animate-pulse" />,
+          color: 'border-brand-primary/30 bg-brand-primary/5 text-brand-primary'
+        };
+      case 'CLUES':
+        return {
+          title: 'Clue Sharing Phase',
+          desc: 'Players are taking turns giving clues about their words. Listen closely!',
+          icon: <Clock className="w-5 h-5 text-brand-secondary animate-spin-slow" />,
+          color: 'border-brand-secondary/30 bg-brand-secondary/5 text-brand-secondary'
+        };
+      case 'VOTING':
+        return {
+          title: 'Voting Phase',
+          desc: 'Players are voting to catch the Impostor. Who seems sus?',
+          icon: <ShieldAlert className="w-5 h-5 text-brand-danger animate-bounce" />,
+          color: 'border-brand-danger/30 bg-brand-danger/5 text-brand-danger'
+        };
+      case 'RESULTS':
+        return {
+          title: 'Results Phase',
+          desc: 'The round has concluded. Check out who won!',
+          icon: <Trophy className="w-5 h-5 text-yellow-400" />,
+          color: 'border-yellow-500/30 bg-yellow-500/5 text-yellow-400'
+        };
+      default:
+        return {
+          title: 'Match in Progress',
+          desc: 'The game is currently active. Waiting for the next round...',
+          icon: <Sparkles className="w-5 h-5 text-indigo-400 animate-pulse" />,
+          color: 'border-indigo-500/30 bg-indigo-500/5 text-indigo-400'
+        };
+    }
+  };
+
   const handleSaveName = () => {
     if (editingNameVal.trim()) {
       updatePlayerName(editingNameVal.trim());
@@ -208,9 +278,14 @@ export const CreateGamePage: React.FC = () => {
   const playersRosterCard = (
     <Card className="p-6 border-white/5 bg-brand-card/50 flex flex-col">
       <div className="flex justify-between items-center mb-3">
-        <label className="text-sm font-bold text-slate-400 tracking-wider uppercase flex items-center gap-2">
+        <label className="text-sm font-bold text-slate-400 tracking-wider uppercase flex items-center gap-2 flex-wrap">
           <UserPlus className="w-4 h-4 text-cyan-400" />
-          {isMultiplayer ? `Lobby Players (${onlinePlayers.length})` : 'Players & Avatars'}
+          <span>{isMultiplayer ? `Lobby Players (${onlinePlayers.length})` : 'Players & Avatars'}</span>
+          {isSpectating && (
+            <span className="text-[9px] bg-brand-warning/10 border border-brand-warning/30 text-brand-warning px-2 py-0.5 rounded-full font-black animate-pulse uppercase tracking-wider select-none shrink-0">
+              Spectating
+            </span>
+          )}
         </label>
         {!isMultiplayer && (
           <button 
@@ -230,18 +305,20 @@ export const CreateGamePage: React.FC = () => {
             <div 
               key={player.id} 
               onClick={() => {
-                playClick();
                 if (player.id === myPlayerId) {
+                  playClick();
                   setEditingNameVal(player.name);
                   setIsEditingName(true);
-                } else {
-                  setSelectedModerationPlayer(player);
                 }
               }}
-              className="flex items-center justify-between bg-white/[0.02] border border-white/5 p-3 rounded-xl transition-all duration-300 hover:bg-white/[0.04] cursor-pointer"
+              className={`flex items-center justify-between bg-white/[0.02] border border-white/5 p-3 rounded-xl transition-all duration-300 ${player.id === myPlayerId ? 'hover:bg-white/[0.04] cursor-pointer' : ''}`}
             >
               <div className="flex items-center gap-2.5">
-                <span className="w-9 h-9 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center text-lg shadow-sm">
+                <span className={`w-9 h-9 rounded-xl bg-white/5 border flex items-center justify-center text-lg shadow-sm transition-all duration-300 ${
+                  playersSpeaking[player.id]
+                    ? 'ring-2 ring-emerald-400 border-emerald-400 shadow-[0_0_10px_rgba(52,211,153,0.25)] animate-pulse'
+                    : 'border-white/10'
+                }`}>
                   {player.avatar}
                 </span>
                 {player.id === myPlayerId ? (
@@ -291,17 +368,92 @@ export const CreateGamePage: React.FC = () => {
                   </span>
                 )}
               </div>
-              {player.isAdmin ? (
-                <span className="text-[9px] bg-brand-primary/20 border border-brand-primary/30 text-brand-primary px-2.5 py-0.5 rounded-full font-black uppercase tracking-wider animate-pulse">
-                  Host
-                </span>
-              ) : (
-                <div className="flex items-center gap-2 select-none">
-                  <span className="text-[9px] bg-white/5 border border-white/10 text-slate-500 px-2 py-0.5 rounded-full font-bold uppercase">
+              <div className="flex items-center gap-2 select-none">
+                {player.isVoiceActive && (
+                  <span 
+                    className={`text-[9px] border px-1.5 py-0.5 rounded-full font-black flex items-center gap-1 leading-none shrink-0 transition-all duration-300 ${
+                      playersSpeaking[player.id]
+                        ? 'text-emerald-400 bg-emerald-500/10 border-emerald-500/25 animate-pulse shadow-[0_0_8px_rgba(52,211,153,0.15)]'
+                        : 'text-slate-400 bg-white/5 border-white/10'
+                    }`} 
+                    title={playersSpeaking[player.id] ? "Speaking" : "In Voice Chat"}
+                  >
+                    <Mic className={`w-2.5 h-2.5 shrink-0 ${playersSpeaking[player.id] ? 'animate-bounce' : ''}`} />
+                    <span>{playersSpeaking[player.id] ? 'Speaking' : 'Voice'}</span>
+                  </span>
+                )}
+                {isMultiplayer && (() => {
+                  const kVotes = kickVotes[player.id]?.length || 0;
+                  const bVotes = banVotes[player.id]?.length || 0;
+                  if (kVotes === 0 && bVotes === 0) return null;
+                  
+                  return (
+                    <div className="flex items-center gap-1 select-none shrink-0">
+                      {kVotes > 0 && (
+                        <span className="text-[9px] bg-brand-primary/10 border border-brand-primary/25 text-brand-primary px-1.5 py-0.5 rounded font-black uppercase tracking-wider flex items-center gap-0.5" title="Votes to kick">
+                          <UserMinus className="w-2.5 h-2.5" />
+                          {kVotes}
+                        </span>
+                      )}
+                      {bVotes > 0 && (
+                        <span className="text-[9px] bg-brand-danger/10 border border-brand-danger/25 text-brand-danger px-1.5 py-0.5 rounded font-black uppercase tracking-wider flex items-center gap-0.5" title="Votes to ban">
+                          <ShieldAlert className="w-2.5 h-2.5" />
+                          {bVotes}
+                        </span>
+                      )}
+                    </div>
+                  );
+                })()}
+
+                {(() => {
+                  const pingVal = player.isHost || player.isAdmin
+                    ? (isHost ? 0 : playerPings[`imposter-${roomCode}`])
+                    : playerPings[player.id];
+                  
+                  if (pingVal === undefined) return null;
+                  
+                  let badgeColor = 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20';
+                  if (pingVal > 150) {
+                    badgeColor = 'text-rose-400 bg-rose-500/10 border-rose-500/20';
+                  } else if (pingVal > 80) {
+                    badgeColor = 'text-amber-400 bg-amber-500/10 border-amber-500/20';
+                  }
+                  
+                  return (
+                    <span className={`text-[9px] border px-1.5 py-0.5 rounded-full font-black flex items-center gap-0.5 leading-none shrink-0 ${badgeColor}`} title="Network Latency">
+                      <Wifi className="w-2.5 h-2.5 shrink-0" />
+                      {pingVal === 0 ? 'Local' : `${pingVal}ms`}
+                    </span>
+                  );
+                })()}
+
+                {/* Host-only moderation button */}
+                {isHost && player.id !== myPlayerId && (
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      playClick();
+                      setHostActionTarget({ id: player.id, name: player.name, avatar: player.avatar });
+                      setHostActionMode('menu');
+                      setHostActionReason('');
+                    }}
+                    className="p-1 rounded-lg bg-white/5 border border-white/10 text-slate-400 hover:bg-white/15 hover:text-white transition-all cursor-pointer shrink-0"
+                    title="Player options"
+                  >
+                    <MoreVertical className="w-3.5 h-3.5" />
+                  </button>
+                )}
+
+                {player.isAdmin ? (
+                  <span className="text-[9px] bg-brand-primary/20 border border-brand-primary/30 text-brand-primary px-2.5 py-0.5 rounded-full font-black uppercase tracking-wider animate-pulse shrink-0">
+                    Host
+                  </span>
+                ) : (
+                  <span className="text-[9px] bg-white/5 border border-white/10 text-slate-500 px-2 py-0.5 rounded-full font-bold uppercase shrink-0">
                     Player
                   </span>
-                </div>
-              )}
+                )}
+              </div>
             </div>
           ))
         ) : (
@@ -392,7 +544,7 @@ export const CreateGamePage: React.FC = () => {
           </div>
         ) : (
           chatMessages
-            .filter(msg => !mutedPlayerIds.includes(msg.senderId))
+            .filter(msg => !mutedPlayerIds.includes(msg.senderId) && (!msg.chatScope || msg.chatScope === 'lobby'))
             .map((msg) => {
               if (msg.isSystem) {
                 return (
@@ -418,7 +570,7 @@ export const CreateGamePage: React.FC = () => {
                   }`}
                 >
                   <span className="w-7 h-7 rounded-lg bg-white/5 border border-white/10 flex items-center justify-center text-sm shadow-sm select-none shrink-0 self-end">
-                    {msg.senderAvatar}
+                    {renderAvatarIcon(msg.senderAvatar)}
                   </span>
                   <div className={`flex flex-col min-w-0 ${isMe ? 'items-end' : 'items-start'}`}>
                     <div className="flex items-center gap-1 text-[8px] text-slate-500 font-extrabold mb-0.5 select-none">
@@ -516,6 +668,32 @@ export const CreateGamePage: React.FC = () => {
               </>
             )}
           </div>
+
+          {isSpectating && (() => {
+            const status = getActiveGameStatus();
+            return (
+              <Card className={`p-5 border-2 ${status.color} animate-fade-in-up flex items-start gap-4 shadow-xl shadow-black/30`}>
+                <div className="p-3 bg-white/5 border border-white/10 rounded-2xl shadow-inner shrink-0">
+                  {status.icon}
+                </div>
+                <div className="flex-1">
+                  <h3 className="text-base font-black tracking-wide flex items-center gap-2">
+                    {status.title}
+                    <span className="text-[9px] bg-white/10 border border-white/20 text-white px-2 py-0.5 rounded-full font-bold uppercase tracking-wider animate-pulse">
+                      Live
+                    </span>
+                  </h3>
+                  <p className="text-xs font-semibold text-slate-300 mt-1 leading-relaxed">
+                    {status.desc}
+                  </p>
+                  <div className="mt-3 flex items-center gap-1.5 text-[10px] text-slate-500 font-extrabold uppercase tracking-wider">
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping" />
+                    Waiting in lobby...
+                  </div>
+                </div>
+              </Card>
+            );
+          })()}
 
           {/* Player Count Selection (Local Only) */}
           {!isMultiplayer && (
@@ -857,6 +1035,98 @@ export const CreateGamePage: React.FC = () => {
                 </button>
               </div>
 
+              {/* Timer Duration Setting */}
+              <div className="flex flex-col gap-2 py-3 border-b border-white/5">
+                <div className="flex items-center justify-between">
+                  <div className="flex flex-col">
+                    <span className="text-sm font-bold text-slate-200 flex items-center gap-1.5">
+                      <Clock className="w-4 h-4 text-brand-secondary" />
+                      Clue Timer Duration {!isLobbyAdmin && <span className="text-[10px] text-slate-500 font-semibold">(Set by Host)</span>}
+                    </span>
+                    <span className="text-xs text-slate-500">
+                      Time limit per player to describe their clue
+                    </span>
+                  </div>
+                </div>
+
+                <div className="flex flex-wrap gap-2 mt-1.5 items-center">
+                  {[30, 40, 50].map((sec) => (
+                    <button
+                      key={sec}
+                      disabled={!isLobbyAdmin}
+                      onClick={() => {
+                        playClick();
+                        setClueTimerLimit(sec);
+                      }}
+                      className={`px-3.5 py-1.5 text-xs font-bold rounded-xl border transition-all ${
+                        clueTimerLimit === sec
+                          ? 'bg-brand-primary border-brand-primary text-white shadow-md shadow-brand-primary/20 scale-[1.03]'
+                          : 'bg-white/5 border-white/10 text-slate-400 hover:bg-white/10 hover:text-slate-200 disabled:opacity-50'
+                      }`}
+                    >
+                      {sec}s
+                    </button>
+                  ))}
+
+                  <div className="flex items-center gap-2">
+                    <button
+                      disabled={!isLobbyAdmin}
+                      onClick={() => {
+                        playClick();
+                        if (clueTimerLimit === 30 || clueTimerLimit === 40 || clueTimerLimit === 50) {
+                          setClueTimerLimit(60);
+                        }
+                      }}
+                      className={`px-3.5 py-1.5 text-xs font-bold rounded-xl border transition-all ${
+                        clueTimerLimit !== 30 && clueTimerLimit !== 40 && clueTimerLimit !== 50
+                          ? 'bg-brand-primary border-brand-primary text-white shadow-md shadow-brand-primary/20 scale-[1.03]'
+                          : 'bg-white/5 border-white/10 text-slate-400 hover:bg-white/10 hover:text-slate-200 disabled:opacity-50'
+                      }`}
+                    >
+                      Custom
+                    </button>
+
+                    {clueTimerLimit !== 30 && clueTimerLimit !== 40 && clueTimerLimit !== 50 && (
+                      <div className="flex flex-col gap-1 items-center animate-scale-in">
+                        <div className="flex items-center gap-1 bg-white/5 border border-white/10 rounded-xl px-2.5 py-1">
+                          <input
+                            type="text"
+                            disabled={!isLobbyAdmin}
+                            value={customInputVal}
+                            onChange={(e) => {
+                              const val = e.target.value.replace(/\D/g, '');
+                              setCustomInputVal(val);
+                              const parsed = parseInt(val, 10);
+                              if (!isNaN(parsed) && parsed >= 5 && parsed <= 300) {
+                                setClueTimerLimit(parsed);
+                              }
+                            }}
+                            onBlur={() => {
+                              let parsed = parseInt(customInputVal, 10);
+                              if (isNaN(parsed) || parsed < 5) {
+                                parsed = 5;
+                              } else if (parsed > 300) {
+                                parsed = 300;
+                              }
+                              setCustomInputVal(String(parsed));
+                              setClueTimerLimit(parsed);
+                            }}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') {
+                                e.currentTarget.blur();
+                              }
+                            }}
+                            className="bg-transparent text-xs font-black text-white w-9 focus:outline-none text-center"
+                          />
+                          <span className="text-[10px] font-black text-slate-500">s</span>
+                        </div>
+                        <span className="text-[9px] font-bold text-slate-500 block">Range: 5s - 300s</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+
               {/* Toggle 4: Sound Effects */}
               <div className="flex items-center justify-between py-1 last:border-0">
                 <div className="flex flex-col">
@@ -917,9 +1187,9 @@ export const CreateGamePage: React.FC = () => {
                   </Button>
                 ) : (
                   <div className="flex-[2] py-4 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center gap-2.5 animate-pulse select-none">
-                    <span className="w-2.5 h-2.5 rounded-full bg-brand-secondary animate-ping" />
+                    <span className={`w-2.5 h-2.5 rounded-full animate-ping ${isSpectating ? 'bg-brand-warning' : 'bg-brand-secondary'}`} />
                     <span className="text-[10px] text-slate-400 font-extrabold uppercase tracking-widest leading-none">
-                      Waiting for Host...
+                      {isSpectating ? 'Game In Progress - Spectating' : 'Waiting for Host...'}
                     </span>
                   </div>
                 )}
@@ -981,16 +1251,7 @@ export const CreateGamePage: React.FC = () => {
         </button>
       )}
 
-      {/* Moderation Overlay popup */}
-      {selectedModerationPlayer && (
-        <PlayerModerationModal
-          playerId={selectedModerationPlayer.id}
-          playerName={selectedModerationPlayer.name}
-          playerAvatar={selectedModerationPlayer.avatar}
-          playerIsAdmin={selectedModerationPlayer.isAdmin || false}
-          onClose={() => setSelectedModerationPlayer(null)}
-        />
-      )}
+
 
       {/* Category Selector Modal Popup */}
       {isCategoryModalOpen && (
@@ -1156,6 +1417,225 @@ export const CreateGamePage: React.FC = () => {
                 Apply & Close ({selectedCategories.includes('Mixed') ? 'Mixed Mode' : `${selectedCategories.filter(c => c !== 'Custom').length} Selected`})
               </Button>
             </div>
+          </div>
+        </div>
+      )}
+      {/* Host Lobby Moderation Modal */}
+      {hostActionTarget && isHost && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-brand-dark/85 backdrop-blur-md animate-fade-in">
+          <div className="w-full max-w-sm rounded-3xl glass-panel border border-white/10 bg-brand-card p-6 shadow-2xl animate-scale-in relative">
+
+            {/* Close Button */}
+            <button
+              onClick={() => {
+                playClick();
+                setHostActionTarget(null);
+              }}
+              className="absolute top-4 right-4 p-1.5 rounded-lg bg-white/5 border border-white/10 text-slate-400 hover:text-white transition-all cursor-pointer"
+            >
+              <X className="w-4 h-4" />
+            </button>
+
+            {/* Player Avatar */}
+            <div className="w-14 h-14 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center text-2xl mx-auto mb-3 shadow-inner">
+              {hostActionTarget.avatar}
+            </div>
+            <h3 className="text-lg font-black text-white tracking-wide text-center">
+              {hostActionTarget.name}
+            </h3>
+            <p className="text-[10px] text-slate-500 font-extrabold uppercase tracking-widest text-center mt-1 mb-5">
+              Host Moderation Panel
+            </p>
+
+            {hostActionMode === 'menu' && (
+              <div className="flex flex-col gap-2.5">
+                {/* Mute / Unmute */}
+                <button
+                  onClick={() => {
+                    playClick();
+                    toggleMutePlayer(hostActionTarget.id);
+                  }}
+                  className="w-full py-3 rounded-xl text-xs font-bold flex items-center justify-center gap-2 bg-white/5 border border-white/10 text-slate-300 hover:bg-white/10 hover:text-white transition-all cursor-pointer"
+                >
+                  {mutedPlayerIds.includes(hostActionTarget.id) ? (
+                    <>
+                      <Volume2 className="w-4 h-4 text-brand-accent" />
+                      Unmute Player Chat
+                    </>
+                  ) : (
+                    <>
+                      <VolumeX className="w-4 h-4 text-brand-warning" />
+                      Mute Player Chat
+                    </>
+                  )}
+                </button>
+
+                {/* Transfer Host */}
+                {hostActionTarget.id !== lobbyAdminId && (
+                  <button
+                    onClick={() => {
+                      playClick();
+                      transferHost(hostActionTarget.id);
+                      setHostActionTarget(null);
+                    }}
+                    className="w-full py-3 rounded-xl text-xs font-bold flex items-center justify-center gap-2 bg-white/5 border border-white/10 text-slate-300 hover:bg-white/10 hover:text-white transition-all cursor-pointer"
+                  >
+                    <Shield className="w-4 h-4 text-brand-secondary" />
+                    Make Lobby Host
+                  </button>
+                )}
+
+                {/* Kick Player */}
+                {hostActionTarget.id !== lobbyAdminId && (
+                  <button
+                    onClick={() => {
+                      playClick();
+                      setHostActionMode('kick');
+                      setHostActionReason('');
+                    }}
+                    className="w-full py-3 rounded-xl text-xs font-bold flex items-center justify-center gap-2 bg-brand-warning/10 border border-brand-warning/30 text-brand-warning hover:bg-brand-warning/20 transition-all cursor-pointer"
+                  >
+                    <UserMinus className="w-4 h-4" />
+                    Kick Player
+                  </button>
+                )}
+
+                {/* Ban Player */}
+                {hostActionTarget.id !== lobbyAdminId && (
+                  <button
+                    onClick={() => {
+                      playClick();
+                      setHostActionMode('ban');
+                      setHostActionReason('');
+                    }}
+                    className="w-full py-3 rounded-xl text-xs font-bold flex items-center justify-center gap-2 bg-brand-danger/10 border border-brand-danger/30 text-brand-danger hover:bg-brand-danger/20 transition-all cursor-pointer"
+                  >
+                    <ShieldAlert className="w-4 h-4" />
+                    Ban Player (Block re-entry)
+                  </button>
+                )}
+
+                {/* Cancel */}
+                <button
+                  onClick={() => {
+                    playClick();
+                    setHostActionTarget(null);
+                  }}
+                  className="w-full py-2.5 rounded-xl text-xs font-bold text-slate-500 hover:text-slate-300 transition-all cursor-pointer mt-1"
+                >
+                  Cancel
+                </button>
+              </div>
+            )}
+
+            {/* Reason Input for Kick */}
+            {hostActionMode === 'kick' && (
+              <div className="flex flex-col gap-3 animate-fade-in">
+                <div className="bg-brand-warning/5 border border-brand-warning/20 rounded-xl p-3 text-center">
+                  <span className="text-xs font-bold text-brand-warning flex items-center justify-center gap-1.5">
+                    <UserMinus className="w-3.5 h-3.5" />
+                    Kick {hostActionTarget.name}
+                  </span>
+                  <p className="text-[10px] text-slate-400 mt-1">This player can rejoin the room after being kicked.</p>
+                </div>
+                <div>
+                  <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest block mb-1.5">
+                    Reason (optional)
+                  </label>
+                  <input
+                    type="text"
+                    value={hostActionReason}
+                    onChange={(e) => setHostActionReason(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        kickPlayer(hostActionTarget.id, hostActionReason.trim() || undefined);
+                        setHostActionTarget(null);
+                      }
+                    }}
+                    placeholder="e.g. Disruptive behavior..."
+                    maxLength={100}
+                    autoFocus
+                    className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2.5 text-sm text-white placeholder-slate-600 focus:outline-none focus:border-brand-warning/50 transition-colors"
+                  />
+                </div>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => {
+                      playClick();
+                      setHostActionMode('menu');
+                    }}
+                    className="flex-1 py-2.5 rounded-xl text-xs font-bold bg-white/5 border border-white/10 text-slate-400 hover:bg-white/10 hover:text-white transition-all cursor-pointer"
+                  >
+                    Back
+                  </button>
+                  <button
+                    onClick={() => {
+                      playClick();
+                      kickPlayer(hostActionTarget.id, hostActionReason.trim() || undefined);
+                      setHostActionTarget(null);
+                    }}
+                    className="flex-[2] py-2.5 rounded-xl text-xs font-extrabold bg-brand-warning border border-brand-warning text-brand-dark hover:bg-amber-500 transition-all cursor-pointer shadow-md shadow-brand-warning/25"
+                  >
+                    Confirm Kick
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Reason Input for Ban */}
+            {hostActionMode === 'ban' && (
+              <div className="flex flex-col gap-3 animate-fade-in">
+                <div className="bg-brand-danger/5 border border-brand-danger/20 rounded-xl p-3 text-center">
+                  <span className="text-xs font-bold text-brand-danger flex items-center justify-center gap-1.5">
+                    <ShieldAlert className="w-3.5 h-3.5" />
+                    Ban {hostActionTarget.name}
+                  </span>
+                  <p className="text-[10px] text-slate-400 mt-1">This player will be permanently blocked from rejoining.</p>
+                </div>
+                <div>
+                  <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest block mb-1.5">
+                    Reason (optional)
+                  </label>
+                  <input
+                    type="text"
+                    value={hostActionReason}
+                    onChange={(e) => setHostActionReason(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        banPlayer(hostActionTarget.id, hostActionReason.trim() || undefined);
+                        setHostActionTarget(null);
+                      }
+                    }}
+                    placeholder="e.g. Cheating, toxic behavior..."
+                    maxLength={100}
+                    autoFocus
+                    className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2.5 text-sm text-white placeholder-slate-600 focus:outline-none focus:border-brand-danger/50 transition-colors"
+                  />
+                </div>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => {
+                      playClick();
+                      setHostActionMode('menu');
+                    }}
+                    className="flex-1 py-2.5 rounded-xl text-xs font-bold bg-white/5 border border-white/10 text-slate-400 hover:bg-white/10 hover:text-white transition-all cursor-pointer"
+                  >
+                    Back
+                  </button>
+                  <button
+                    onClick={() => {
+                      playClick();
+                      banPlayer(hostActionTarget.id, hostActionReason.trim() || undefined);
+                      setHostActionTarget(null);
+                    }}
+                    className="flex-[2] py-2.5 rounded-xl text-xs font-extrabold bg-brand-danger border border-brand-danger text-white hover:bg-red-600 transition-all cursor-pointer shadow-md shadow-brand-danger/25"
+                  >
+                    Confirm Ban
+                  </button>
+                </div>
+              </div>
+            )}
+
           </div>
         </div>
       )}
