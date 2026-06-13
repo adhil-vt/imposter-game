@@ -284,6 +284,10 @@ interface GameContextType {
   toggleDeafenAll: () => void;
   deafenedPlayerIds: string[];
   toggleDeafenPlayer: (playerId: string) => void;
+
+  // Gemini API Key for AI word generation
+  geminiApiKey: string;
+  setGeminiApiKey: (key: string) => void;
 }
 
 const GameContext = createContext<GameContextType | undefined>(undefined);
@@ -381,6 +385,12 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return saved ? parseInt(saved, 10) : 30;
   });
 
+  // Gemini API Key for AI word generation (stored in localStorage)
+  const [geminiApiKey, setGeminiApiKey] = useState<string>(() => {
+    const saved = localStorage.getItem('whoisfake_gemini_api_key');
+    return saved || '';
+  });
+
   // Sync toggles with LocalStorage
   useEffect(() => {
     setSoundEffectsEnabled(soundEnabled);
@@ -398,6 +408,10 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
   useEffect(() => {
     localStorage.setItem('impostor_clue_timer_limit', String(clueTimerLimit));
   }, [clueTimerLimit]);
+
+  useEffect(() => {
+    localStorage.setItem('whoisfake_gemini_api_key', geminiApiKey);
+  }, [geminiApiKey]);
 
   useEffect(() => {
     localStorage.setItem('impostor_difficulty', difficulty);
@@ -3017,6 +3031,8 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
         toggleDeafenAll,
         deafenedPlayerIds,
         toggleDeafenPlayer,
+        geminiApiKey,
+        setGeminiApiKey,
       }}
     >
       {children}

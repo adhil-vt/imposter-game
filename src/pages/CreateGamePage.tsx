@@ -112,6 +112,8 @@ export const CreateGamePage: React.FC = () => {
     setMicVolume,
     speakerVolume,
     setSpeakerVolume,
+    geminiApiKey,
+    setGeminiApiKey,
   } = useGame();
 
   const [copied, setCopied] = useState(false);
@@ -121,6 +123,7 @@ export const CreateGamePage: React.FC = () => {
   const [newImpostorWord, setNewImpostorWord] = useState<string>('');
   const [customWordError, setCustomWordError] = useState<string>('');
   const [customInputVal, setCustomInputVal] = useState<string>(String(clueTimerLimit));
+  const [apiKeyInput, setApiKeyInput] = useState<string>(geminiApiKey);
 
   // Host lobby moderation state
   type HostActionMode = 'menu' | 'kick' | 'ban';
@@ -1337,6 +1340,43 @@ export const CreateGamePage: React.FC = () => {
                     }`}
                   />
                 </button>
+              </div>
+            </Card>
+          )}
+
+          {/* API Key Input Card (Host Only) */}
+          {isHost && (
+            <Card className="p-6 border-white/5 bg-brand-card/50">
+              <label className="text-sm font-bold text-slate-400 tracking-wider uppercase flex items-center gap-2 mb-4">
+                <Sparkles className="w-4 h-4 text-amber-400" />
+                Gemini API Key (Optional)
+              </label>
+              <p className="text-xs text-slate-400 mb-3">
+                Provide your Google Gemini API key to enable AI-powered word generation. Your key is stored locally and never sent to our servers.
+              </p>
+              <div className="flex flex-col gap-2">
+                <input
+                  type="password"
+                  placeholder="Enter your Gemini API key..."
+                  value={apiKeyInput}
+                  onChange={(e) => setApiKeyInput(e.target.value)}
+                  className="bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-brand-primary/50 focus:ring-1 focus:ring-brand-primary/30 transition-all"
+                />
+                <button
+                  onClick={() => {
+                    playClick();
+                    setGeminiApiKey(apiKeyInput);
+                  }}
+                  className="bg-brand-primary/20 hover:bg-brand-primary/30 border border-brand-primary/30 hover:border-brand-primary/50 text-brand-primary text-xs font-bold py-2 px-3 rounded-lg transition-all"
+                >
+                  Save API Key
+                </button>
+                {geminiApiKey && (
+                  <div className="text-[10px] text-emerald-400 flex items-center gap-1.5 mt-1">
+                    <span className="w-2 h-2 bg-emerald-400 rounded-full" />
+                    API Key saved to local storage
+                  </div>
+                )}
               </div>
             </Card>
           )}
