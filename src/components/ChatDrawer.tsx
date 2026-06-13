@@ -6,6 +6,7 @@ import { renderAvatarIcon } from '../utils/avatarHelper';
 
 interface ChatDrawerProps {
   embedded?: boolean;
+  hideFloatingOnDesktop?: boolean;
 }
 
 type ToastMessage = {
@@ -15,7 +16,7 @@ type ToastMessage = {
   text: string;
 };
 
-export const ChatDrawer: React.FC<ChatDrawerProps> = ({ embedded = false }) => {
+export const ChatDrawer: React.FC<ChatDrawerProps> = ({ embedded = false, hideFloatingOnDesktop = false }) => {
   const {
     isMultiplayer,
     gameState,
@@ -533,26 +534,29 @@ export const ChatDrawer: React.FC<ChatDrawerProps> = ({ embedded = false }) => {
         </div>
       )}
 
-      <button
-        onClick={handleToggle}
-        className="fixed bottom-6 right-6 z-40 w-14 h-14 rounded-full bg-gradient-to-tr from-brand-secondary to-pink-600 border border-white/10 hover:scale-105 active:scale-95 transition-all shadow-lg flex items-center justify-center cursor-pointer glow-secondary select-none animate-fade-in-up"
-        title="Open Chat"
-      >
-        <MessageSquare className="w-6 h-6 text-white" />
-        {unreadChatCount > 0 && (
-          <span className="absolute -top-1 -right-1 bg-brand-danger border border-brand-dark/20 text-white text-[10px] font-black w-5.5 h-5.5 rounded-full flex items-center justify-center shadow-lg animate-pulse">
-            {unreadChatCount}
-          </span>
-        )}
-      </button>
+      {(!hideFloatingOnDesktop || isMobileViewport) && (
+        <button
+          onClick={handleToggle}
+          className="fixed bottom-6 right-6 z-40 w-14 h-14 rounded-full bg-gradient-to-tr from-brand-secondary to-pink-600 border border-white/10 hover:scale-105 active:scale-95 transition-all shadow-lg flex items-center justify-center cursor-pointer glow-secondary select-none animate-fade-in-up"
+          title="Open Chat"
+        >
+          <MessageSquare className="w-6 h-6 text-white" />
+          {unreadChatCount > 0 && (
+            <span className="absolute -top-1 -right-1 bg-brand-danger border border-brand-dark/20 text-white text-[10px] font-black w-5.5 h-5.5 rounded-full flex items-center justify-center shadow-lg animate-pulse">
+              {unreadChatCount}
+            </span>
+          )}
+        </button>
+      )}
 
-      {isChatOpen && (
+      {(!hideFloatingOnDesktop || isMobileViewport) && isChatOpen && (
         <div
           onClick={handleToggle}
           className="fixed inset-0 z-45 bg-black/40 backdrop-blur-[2px] transition-opacity duration-300"
         />
       )}
 
+      {(!hideFloatingOnDesktop || isMobileViewport) && (
       <div
         className={`fixed right-0 top-0 bottom-0 z-50 h-[100dvh] w-80 sm:w-96 glass-panel border-y-0 border-r-0 rounded-none bg-brand-dark/95 shadow-2xl flex flex-col overflow-hidden transition-transform duration-300 ease-out ${
           isChatOpen ? 'translate-x-0' : 'translate-x-full'
@@ -627,6 +631,7 @@ export const ChatDrawer: React.FC<ChatDrawerProps> = ({ embedded = false }) => {
           renderVoicePanel()
         )}
       </div>
+      )}
     </>
   );
 };

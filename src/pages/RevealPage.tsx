@@ -186,9 +186,7 @@ export const RevealPage: React.FC = () => {
           <ChatDrawer embedded />
         </div>
 
-        <div className="lg:hidden">
-          <ChatDrawer />
-        </div>
+        <ChatDrawer hideFloatingOnDesktop />
       </div>
     );
   }
@@ -302,9 +300,7 @@ export const RevealPage: React.FC = () => {
         <ChatDrawer embedded />
       </div>
 
-      <div className="lg:hidden">
-        <ChatDrawer />
-      </div>
+      <ChatDrawer hideFloatingOnDesktop />
     </div>
   );
 };

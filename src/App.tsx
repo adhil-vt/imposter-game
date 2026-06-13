@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { GameProvider, useGame } from './context/GameContext';
 import { Header } from './components/Header';
 import { CustomCursor } from './components/CustomCursor';
@@ -14,10 +15,12 @@ import { RulesPage } from './pages/RulesPage';
 import { AboutPage } from './pages/AboutPage';
 import { ChangelogPage } from './pages/ChangelogPage';
 
+import { Button } from './components/Button';
 import { playClick } from './utils/sounds';
-import { Mic } from 'lucide-react';
+import { Mic, Flag } from 'lucide-react';
 
 function GameContent() {
+  const [showSurrenderPanel, setShowSurrenderPanel] = useState(false);
   const {
     gameState,
     roomNotice,
@@ -30,6 +33,8 @@ function GameContent() {
     onlinePlayers,
     myPlayerId,
     isMultiplayer,
+    surrenderVotes,
+    voteToSurrender,
   } = useGame();
 
   const renderPage = () => {
@@ -119,6 +124,80 @@ function GameContent() {
 
       {/* Global Multiplayer Chat Panel */}
       {gameState !== 'REVEAL' && <ChatDrawer />}
+
+      {/* Global Surrender Vote Control - Collapsible */}
+      {isMultiplayer && ['REVEAL', 'CLUES', 'VOTING'].includes(gameState) && (
+        <div className="fixed bottom-6 right-6 z-40">
+          {/* Small Toggle Button */}
+          <button
+            onClick={() => {
+              playClick();
+              setShowSurrenderPanel(!showSurrenderPanel);
+            }}
+            className="flex items-center justify-center w-12 h-12 rounded-full bg-gradient-to-br from-orange-500/80 to-red-500/80 border border-orange-400/50 shadow-lg hover:shadow-xl hover:from-orange-500 hover:to-red-500 transition-all duration-300 active:scale-95 cursor-pointer relative"
+            title="Surrender Vote"
+          >
+            <Flag className="w-5 h-5 text-white" />
+            {surrenderVotes.length > 0 && (
+              <span className="absolute -top-1 -right-1 w-5 h-5 bg-brand-danger rounded-full flex items-center justify-center text-[10px] font-black text-white">
+                {surrenderVotes.length}
+              </span>
+            )}
+          </button>
+
+          {/* Expanded Panel - Hidden by Default */}
+          {showSurrenderPanel && (
+            <div className="absolute bottom-16 right-0 w-80 glass-panel border-white/10 bg-brand-dark/95 shadow-2xl p-5 backdrop-blur-xl rounded-2xl animate-scale-in">
+              <div className="flex items-start justify-between gap-3 mb-4">
+                <div>
+                  <h3 className="text-sm font-bold text-white">Vote to Surrender</h3>
+                  <p className="text-xs text-slate-400">Agree with your team to end the round and return to the lobby.</p>
+                </div>
+                <button
+                  onClick={() => {
+                    playClick();
+                    setShowSurrenderPanel(false);
+                  }}
+                  className="text-slate-400 hover:text-white transition-colors shrink-0"
+                  title="Close"
+                >
+                  ✕
+                </button>
+              </div>
+              <div className="flex items-center justify-between gap-2 mb-4 p-3 rounded-lg bg-white/5 border border-white/10">
+                <span className="text-xs font-bold text-slate-300">
+                  {onlinePlayers.length >= 3
+                    ? `${surrenderVotes.length} / ${Math.floor(onlinePlayers.length / 2) + 1} votes`
+                    : 'Need 3+ players'}
+                </span>
+                {onlinePlayers.length >= 3 && (
+                  <div className="flex gap-1">
+                    {Array.from({ length: Math.floor(onlinePlayers.length / 2) + 1 }).map((_, i) => (
+                      <div
+                        key={i}
+                        className={`w-2 h-2 rounded-full ${
+                          i < surrenderVotes.length ? 'bg-brand-primary' : 'bg-white/10'
+                        }`}
+                      />
+                    ))}
+                  </div>
+                )}
+              </div>
+              <Button
+                variant={surrenderVotes.includes(myPlayerId) ? 'secondary' : 'primary'}
+                onClick={() => {
+                  playClick();
+                  voteToSurrender();
+                }}
+                disabled={onlinePlayers.length < 3}
+                className="w-full py-3 rounded-xl text-sm"
+              >
+                {surrenderVotes.includes(myPlayerId) ? '✓ Voted' : 'Vote Now'}
+              </Button>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Active Speakers Overlay */}
       {isMultiplayer && isVoiceActive && ['REVEAL', 'CLUES', 'VOTING', 'RESULTS'].includes(gameState) && (

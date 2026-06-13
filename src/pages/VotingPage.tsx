@@ -1,5 +1,6 @@
 import React from 'react';
 import { useGame } from '../context/GameContext';
+import { Button } from '../components/Button';
 import { Card } from '../components/Card';
 import { playClick } from '../utils/sounds';
 import { UserCheck, Wifi, Flag } from 'lucide-react';
@@ -14,6 +15,8 @@ export const VotingPage: React.FC = () => {
     isLobbyAdmin,
     myPlayerId,
     votes,
+    surrenderVotes,
+    voteToSurrender,
     onlinePlayers,
     playerPings,
     roomCode,
@@ -46,6 +49,64 @@ export const VotingPage: React.FC = () => {
               <div className="mt-6 pt-4 border-t border-white/5 text-[10px] text-slate-500 font-extrabold uppercase tracking-widest">
                 Progress: {Object.keys(votes).length} / {onlinePlayers.length} Voted
               </div>
+            )}
+
+            {isMultiplayer && (
+              <Card className="mt-6 p-5 border-white/5 bg-brand-card/40">
+                <div className="flex flex-col gap-3">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h4 className="text-sm font-bold text-white">Vote to Surrender</h4>
+                      <p className="text-xs text-slate-400">Majority will end the round and send everyone back to the lobby.</p>
+                    </div>
+                    <span className="text-[10px] uppercase tracking-widest text-slate-500">
+                      {onlinePlayers.length >= 3
+                        ? `${surrenderVotes.length} / ${Math.floor(onlinePlayers.length / 2) + 1}`
+                        : 'Need 3+ players'}
+                    </span>
+                  </div>
+                  <Button
+                    variant={surrenderVotes.includes(myPlayerId) ? 'secondary' : 'primary'}
+                    onClick={() => {
+                      playClick();
+                      voteToSurrender();
+                    }}
+                    disabled={onlinePlayers.length < 3}
+                    className="w-full py-4 rounded-2xl text-sm"
+                  >
+                    {surrenderVotes.includes(myPlayerId) ? 'Retract Surrender Vote' : 'Vote to Surrender'}
+                  </Button>
+                </div>
+              </Card>
+            )}
+
+            {isMultiplayer && (
+              <Card className="mt-6 p-5 border-white/5 bg-brand-card/40">
+                <div className="flex flex-col gap-3">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h4 className="text-sm font-bold text-white">Vote to Surrender</h4>
+                      <p className="text-xs text-slate-400">Majority will end the round and send everyone back to the lobby.</p>
+                    </div>
+                    <span className="text-[10px] uppercase tracking-widest text-slate-500">
+                      {onlinePlayers.length >= 3
+                        ? `${surrenderVotes.length} / ${Math.floor(onlinePlayers.length / 2) + 1}`
+                        : 'Need 3+ players'}
+                    </span>
+                  </div>
+                  <Button
+                    variant={surrenderVotes.includes(myPlayerId) ? 'secondary' : 'primary'}
+                    onClick={() => {
+                      playClick();
+                      voteToSurrender();
+                    }}
+                    disabled={onlinePlayers.length < 3}
+                    className="w-full py-4 rounded-2xl text-sm"
+                  >
+                    {surrenderVotes.includes(myPlayerId) ? 'Retract Surrender Vote' : 'Vote to Surrender'}
+                  </Button>
+                </div>
+              </Card>
             )}
           </Card>
         </div>
@@ -153,6 +214,7 @@ export const VotingPage: React.FC = () => {
             ))}
           </div>
         </Card>
+
       </div>
     </div>
   );

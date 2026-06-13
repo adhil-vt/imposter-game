@@ -112,6 +112,9 @@ export const CreateGamePage: React.FC = () => {
     setMicVolume,
     speakerVolume,
     setSpeakerVolume,
+    useAiWordGeneration,
+    setUseAiWordGeneration,
+    aiGenerationError,
     geminiApiKey,
     setGeminiApiKey,
   } = useGame();
@@ -1347,36 +1350,87 @@ export const CreateGamePage: React.FC = () => {
           {/* API Key Input Card (Host Only) */}
           {isHost && (
             <Card className="p-6 border-white/5 bg-brand-card/50">
-              <label className="text-sm font-bold text-slate-400 tracking-wider uppercase flex items-center gap-2 mb-4">
-                <Sparkles className="w-4 h-4 text-amber-400" />
-                Gemini API Key (Optional)
-              </label>
-              <p className="text-xs text-slate-400 mb-3">
-                Provide your Google Gemini API key to enable AI-powered word generation. Your key is stored locally and never sent to our servers.
-              </p>
-              <div className="flex flex-col gap-2">
-                <input
-                  type="password"
-                  placeholder="Enter your Gemini API key..."
-                  value={apiKeyInput}
-                  onChange={(e) => setApiKeyInput(e.target.value)}
-                  className="bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-brand-primary/50 focus:ring-1 focus:ring-brand-primary/30 transition-all"
-                />
-                <button
-                  onClick={() => {
-                    playClick();
-                    setGeminiApiKey(apiKeyInput);
-                  }}
-                  className="bg-brand-primary/20 hover:bg-brand-primary/30 border border-brand-primary/30 hover:border-brand-primary/50 text-brand-primary text-xs font-bold py-2 px-3 rounded-lg transition-all"
-                >
-                  Save API Key
-                </button>
-                {geminiApiKey && (
-                  <div className="text-[10px] text-emerald-400 flex items-center gap-1.5 mt-1">
-                    <span className="w-2 h-2 bg-emerald-400 rounded-full" />
-                    API Key saved to local storage
+              <div className="flex flex-col gap-4">
+                <div>
+                  <label className="text-sm font-bold text-slate-400 tracking-wider uppercase flex items-center gap-2 mb-2">
+                    <Sparkles className="w-4 h-4 text-amber-400" />
+                    Gemini AI Word Generation
+                  </label>
+                  <p className="text-xs text-slate-400">
+                    Enable AI-generated word pairs for your custom game lobby. The host can enter a Gemini API key once, and it will be stored locally in the browser.
+                  </p>
+                </div>
+
+                <div className="flex items-center justify-between gap-3 rounded-2xl border border-white/10 bg-white/5 p-3">
+                  <div>
+                    <p className="text-sm font-semibold text-slate-100">AI word generation</p>
+                    <p className="text-[11px] text-slate-500">Creates fresh pairs from Gemini when enabled.</p>
                   </div>
-                )}
+                  <button
+                    onClick={() => {
+                      playClick();
+                      setUseAiWordGeneration(!useAiWordGeneration);
+                    }}
+                    className={`w-12 h-6 rounded-full transition-colors relative border border-white/10 ${useAiWordGeneration ? 'bg-brand-primary' : 'bg-white/5'}`}>
+                    <span
+                      className={`absolute top-0.5 w-4.5 h-4.5 rounded-full bg-white transition-all duration-300 ${useAiWordGeneration ? 'left-[25px]' : 'left-[3px]'}`}
+                    />
+                  </button>
+                </div>
+
+                <div className="flex flex-col gap-2">
+                  <label className="text-xs font-bold uppercase tracking-widest text-slate-500">Gemini API key</label>
+                  <input
+                    type="password"
+                    placeholder="Enter your Gemini API key..."
+                    value={apiKeyInput}
+                    onChange={(e) => setApiKeyInput(e.target.value)}
+                    disabled={!useAiWordGeneration}
+                    className="bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-brand-primary/50 focus:ring-1 focus:ring-brand-primary/30 transition-all disabled:cursor-not-allowed disabled:opacity-50"
+                  />
+                  <div className="flex flex-wrap gap-2 items-center">
+                    <button
+                      onClick={() => {
+                        playClick();
+                        setGeminiApiKey(apiKeyInput);
+                      }}
+                      className="bg-brand-primary/20 hover:bg-brand-primary/30 border border-brand-primary/30 hover:border-brand-primary/50 text-brand-primary text-xs font-bold py-2 px-3 rounded-lg transition-all"
+                    >
+                      Save API Key
+                    </button>
+                    <a
+                      href="https://aistudio.google.com/"
+                      target="_blank"
+                      rel="noreferrer"
+                      className="inline-flex items-center justify-center bg-white/5 border border-white/10 text-slate-100 text-xs font-bold py-2 px-3 rounded-lg hover:bg-white/10 transition-all"
+                    >
+                      Open Google AI Studio
+                    </a>
+                    <span className="inline-flex items-center gap-1 text-xs text-slate-400" title="Open AI Studio, create or use a Gemini API key, then paste it above and save.">
+                      <HelpCircle
+                        className="w-4 h-4 text-slate-400 hover:text-slate-100 cursor-help"
+                      />
+                      Hover for setup tips
+                    </span>
+                  </div>
+                  <p className="text-[10px] text-slate-500">
+                    When AI generation is turned off, the game will use the built-in word database only.
+                  </p>
+                  <div className="text-[10px] text-emerald-400 flex items-center gap-1.5 mt-1">
+                    <span className={`w-2 h-2 rounded-full ${geminiApiKey ? 'bg-emerald-400' : 'bg-slate-500'}`} />
+                    {geminiApiKey ? 'API Key saved to local storage.' : 'No API key saved yet.'}
+                  </div>
+                  {useAiWordGeneration && !geminiApiKey && (
+                    <p className="text-[10px] text-amber-300">
+                      AI generation is enabled, but no API key is saved. Enter your key and click Save.
+                    </p>
+                  )}
+                  {aiGenerationError && (
+                    <p className="text-[10px] text-rose-300">
+                      {aiGenerationError}
+                    </p>
+                  )}
+                </div>
               </div>
             </Card>
           )}
@@ -1399,7 +1453,7 @@ export const CreateGamePage: React.FC = () => {
                   <Button 
                     variant="primary" 
                     onClick={startGame} 
-                    disabled={onlinePlayers.length < 3 || selectedCategories.length === 0 || isCustomCategoryEmpty}
+                    disabled={onlinePlayers.length < 3 || selectedCategories.length === 0 || isCustomCategoryEmpty || (useAiWordGeneration && !geminiApiKey)}
                     className="flex-[2] py-4 rounded-2xl font-bold disabled:opacity-40 disabled:pointer-events-none"
                   >
                     <Play className="w-5 h-5 mr-2" />
@@ -1430,7 +1484,7 @@ export const CreateGamePage: React.FC = () => {
                 <Button 
                   variant="primary" 
                   onClick={startGame} 
-                  disabled={selectedCategories.length === 0 || isCustomCategoryEmpty}
+                  disabled={selectedCategories.length === 0 || isCustomCategoryEmpty || (useAiWordGeneration && !geminiApiKey)}
                   className="flex-[2] py-4 rounded-2xl font-bold disabled:opacity-40 disabled:pointer-events-none"
                 >
                   <Play className="w-5 h-5 mr-2" />

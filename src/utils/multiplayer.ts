@@ -35,7 +35,7 @@ export type NetworkMessage =
   | { type: 'PLAY_AGAIN' }
   | { type: 'STATE_CHANGE'; state: string }
   | { type: 'KICKED'; reason?: string; isBan?: boolean }
-  | { type: 'VOTE_INITIATED'; targetId: string; targetName: string; voteType: 'KICK' | 'BAN'; initiatorName: string; initiatorId: string }
+  | { type: 'VOTE_INITIATED'; targetId: string; targetName: string; voteType: 'KICK' | 'BAN' | 'SURRENDER'; initiatorName: string; initiatorId: string }
   | { type: 'GAME_PLAYERS_UPDATE'; players: any[]; playerOrder: string[] }
   | { type: 'CHAT'; message: any }
   | { type: 'ROOM_NOTICE'; text: string }
@@ -55,7 +55,9 @@ export type NetworkMessage =
   | { type: 'PING_UPDATE'; pings: Record<string, number> }
   | { type: 'VOTE_KICK_REQUEST'; targetId: string; voterId: string }
   | { type: 'VOTE_BAN_REQUEST'; targetId: string; voterId: string }
+  | { type: 'VOTE_SURRENDER_REQUEST'; voterId: string }
   | { type: 'VOTE_KICK_BAN_SYNC'; kickVotes: Record<string, string[]>; banVotes: Record<string, string[]> }
+  | { type: 'VOTE_SURRENDER_SYNC'; surrenderVotes: string[] }
   | { type: 'GAME_IN_PROGRESS'; isStarted: boolean; currentGameState: string }
   | { type: 'VOICE_TOGGLE'; active: boolean };
 

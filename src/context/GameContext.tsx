@@ -1,7 +1,8 @@
 /* eslint-disable react-refresh/only-export-components */
 import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
-import { getRandomWordPair } from '../data/words';
+import { getRandomWordPair, wordDatabase } from '../data/words';
 import type { CategoryKey, WordPair, VisualAid, DifficultyKey } from '../data/words';
+import { generateAiWordPair } from '../utils/gemini';
 import {
   playClick,
   playFlip,
@@ -32,6 +33,45 @@ export interface ChatMessage {
   timestamp: number;
   isSystem?: boolean;
   chatScope?: 'lobby' | 'game';
+}
+
+function isBuiltInCommonWord(common: string, customPool: WordPair[]): boolean {
+  const normalized = common.trim().toLowerCase();
+  if (!normalized) return false;
+
+  const isInBuiltIn = Object.values(wordDatabase).some(categoryList =>
+    categoryList.some(pair => pair.common.trim().toLowerCase() === normalized)
+  );
+
+  if (isInBuiltIn) return true;
+
+  return customPool.some(pair => pair.common.trim().toLowerCase() === normalized);
+}
+
+async function getAiWordPairOrNull(
+  categories: CategoryKey[],
+  difficulty: DifficultyKey,
+  customPool: WordPair[],
+  apiKey: string
+): Promise<WordPair | null> {
+  if (!apiKey) return null;
+
+  const requestCategories: CategoryKey[] = categories.length > 0 ? categories : ['Mixed'];
+  const attempts = 2;
+
+  for (let attempt = 0; attempt < attempts; attempt += 1) {
+    try {
+      const generated = await generateAiWordPair({ categories: requestCategories, difficulty }, apiKey);
+      if (generated && !isBuiltInCommonWord(generated.common, customPool)) {
+        return generated;
+      }
+    } catch (error) {
+      console.error('AI word generation failed:', error);
+      return null;
+    }
+  }
+
+  return null;
 }
 
 export type GameState = 'HOME' | 'RULES' | 'ABOUT' | 'SETUP' | 'REVEAL' | 'CLUES' | 'VOTING' | 'RESULTS' | 'CHANGELOG';
@@ -157,6 +197,12 @@ interface GameContextType {
   clueTimerLimit: number;
   setClueTimerLimit: (limit: number) => void;
 
+  // AI word generation
+  useAiWordGeneration: boolean;
+  setUseAiWordGeneration: (enabled: boolean) => void;
+  aiGenerationError: string;
+  setAiGenerationError: (error: string) => void;
+
   // Reveal flow state
   currentRevealIndex: number;
   isWordRevealed: boolean;
@@ -180,7 +226,7 @@ interface GameContextType {
 
   // Game control
   initiateSetup: () => void;
-  startGame: () => void;
+  startGame: () => Promise<void>;
   restartGame: () => void;
   resetGame: () => void;
 
@@ -255,8 +301,10 @@ interface GameContextType {
   playerPings: Record<string, number>;
   kickVotes: Record<string, string[]>;
   banVotes: Record<string, string[]>;
+  surrenderVotes: string[];
   voteToKickPlayer: (targetId: string) => void;
   voteToBanPlayer: (targetId: string) => void;
+  voteToSurrender: () => void;
   selectedModerationPlayer: NetworkPlayer | null;
   setSelectedModerationPlayer: (player: NetworkPlayer | null) => void;
   roomNotice: {
@@ -391,6 +439,13 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return saved || '';
   });
 
+  const [useAiWordGeneration, setUseAiWordGeneration] = useState<boolean>(() => {
+    const saved = localStorage.getItem('whoisfake_use_ai_word_generation');
+    return saved !== null ? saved === 'true' : false;
+  });
+
+  const [aiGenerationError, setAiGenerationError] = useState<string>('');
+
   // Sync toggles with LocalStorage
   useEffect(() => {
     setSoundEffectsEnabled(soundEnabled);
@@ -412,6 +467,10 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
   useEffect(() => {
     localStorage.setItem('whoisfake_gemini_api_key', geminiApiKey);
   }, [geminiApiKey]);
+
+  useEffect(() => {
+    localStorage.setItem('whoisfake_use_ai_word_generation', String(useAiWordGeneration));
+  }, [useAiWordGeneration]);
 
   useEffect(() => {
     localStorage.setItem('impostor_difficulty', difficulty);
@@ -509,6 +568,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [playerPings, setPlayerPings] = useState<Record<string, number>>({});
   const [kickVotes, setKickVotes] = useState<Record<string, string[]>>({});
   const [banVotes, setBanVotes] = useState<Record<string, string[]>>({});
+  const [surrenderVotes, setSurrenderVotes] = useState<string[]>([]);
   const [selectedModerationPlayer, setSelectedModerationPlayer] = useState<NetworkPlayer | null>(null);
   const [playersWhoRevealed, setPlayersWhoRevealed] = useState<string[]>([]);
   const [isSpectating, setIsSpectating] = useState<boolean>(false);
@@ -734,7 +794,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const triggerVoteNotificationLocal = (
-    voteType: 'KICK' | 'BAN',
+    voteType: 'KICK' | 'BAN' | 'SURRENDER',
     targetId: string,
     targetName: string,
     initiatorId: string,
@@ -742,17 +802,19 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
   ) => {
     const currentId = myPlayerIdRef.current;
     if (targetId !== currentId && initiatorId !== currentId) {
-      const action = voteType === 'KICK' ? 'kick' : 'ban';
-      const label = voteType === 'KICK' ? 'Kick' : 'Ban';
+      const action = voteType === 'KICK' ? 'kick' : voteType === 'BAN' ? 'ban' : 'surrender';
+      const label = voteType === 'KICK' ? 'Kick' : voteType === 'BAN' ? 'Ban' : 'Surrender';
       pushVoteNotification({
         id: `vote_${Date.now()}`,
-        message: `🗳️ ${initiatorName} wants to ${action} ${targetName}. Vote ${label}?`,
+        message: `🗳️ ${initiatorName} wants to ${action}${voteType === 'SURRENDER' ? '' : ` ${targetName}`}. Vote ${label}?`,
         onAccept: () => {
           if (multiplayer.isHost) {
             if (voteType === 'KICK') {
               handleVoteKickRequest(targetId, currentId);
-            } else {
+            } else if (voteType === 'BAN') {
               handleVoteBanRequest(targetId, currentId);
+            } else {
+              handleVoteSurrenderRequest(currentId);
             }
           } else {
             if (voteType === 'KICK') {
@@ -761,10 +823,15 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 targetId,
                 voterId: currentId
               });
-            } else {
+            } else if (voteType === 'BAN') {
               multiplayer.send({
                 type: 'VOTE_BAN_REQUEST',
                 targetId,
+                voterId: currentId
+              });
+            } else {
+              multiplayer.send({
+                type: 'VOTE_SURRENDER_REQUEST',
                 voterId: currentId
               });
             }
@@ -953,38 +1020,80 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const kickVotesRef = useRef<Record<string, string[]>>({});
   const banVotesRef = useRef<Record<string, string[]>>({});
+  const surrenderVotesRef = useRef<string[]>([]);
   useEffect(() => { kickVotesRef.current = kickVotes; }, [kickVotes]);
   useEffect(() => { banVotesRef.current = banVotes; }, [banVotes]);
+  useEffect(() => { surrenderVotesRef.current = surrenderVotes; }, [surrenderVotes]);
 
-  const checkDemocraticMajority = (targetId: string, votesArray: string[], action: 'KICK' | 'BAN') => {
+  const endMatchAndReturnToLobby = () => {
+    if (isMultiplayer && !isHost) return;
+
+    setVotes({});
+    setPlayersWhoRevealed([]);
+    setWinner(null);
+    setVoteStats({});
+    setReadyPlayers([]);
+    setIsSpectating(false);
+    setActiveGameState(null);
+    setKickVotes({});
+    setBanVotes({});
+    setSurrenderVotes([]);
+    setGameState('SETUP');
+
+    if (isMultiplayer && isHost) {
+      multiplayer.send({ type: 'PLAY_AGAIN' });
+    }
+  };
+
+  const checkDemocraticMajority = (
+    targetId: string,
+    votesArray: string[],
+    action: 'KICK' | 'BAN' | 'SURRENDER'
+  ) => {
     const totalPlayers = onlinePlayersRef.current.length;
     const requiredVotes = Math.floor(totalPlayers / 2) + 1;
 
     if (votesArray.length >= requiredVotes && totalPlayers >= 3) {
       const targetPlayer = onlinePlayersRef.current.find(p => p.id === targetId);
-      const targetName = targetPlayer?.name || 'Player';
+      const targetName = action === 'SURRENDER'
+        ? 'Surrender'
+        : targetPlayer?.name || 'Player';
 
-      const noticeText = action === 'KICK'
-        ? `Democratic Vote: ${targetName} was kicked from the room (${votesArray.length}/${totalPlayers} votes).`
-        : `Democratic Vote: ${targetName} was banned from the room (${votesArray.length}/${totalPlayers} votes).`;
+      let noticeText = '';
+      let systemAvatar = 'system-info';
 
-      setKickVotes(prev => {
-        const next = { ...prev };
-        delete next[targetId];
-        return next;
-      });
-      setBanVotes(prev => {
-        const next = { ...prev };
-        delete next[targetId];
-        return next;
-      });
+      if (action === 'KICK') {
+        noticeText = `Democratic Vote: ${targetName} was kicked from the room (${votesArray.length}/${totalPlayers} votes).`;
+        systemAvatar = 'system-kick';
+      } else if (action === 'BAN') {
+        noticeText = `Democratic Vote: ${targetName} was banned from the room (${votesArray.length}/${totalPlayers} votes).`;
+        systemAvatar = 'system-ban';
+      } else {
+        noticeText = `Democratic Vote: surrender carried (${votesArray.length}/${totalPlayers} votes). Returning everyone to the lobby.`;
+        systemAvatar = 'system-info';
+      }
+
+      if (action !== 'SURRENDER') {
+        setKickVotes(prev => {
+          const next = { ...prev };
+          delete next[targetId];
+          return next;
+        });
+        setBanVotes(prev => {
+          const next = { ...prev };
+          delete next[targetId];
+          return next;
+        });
+      } else {
+        setSurrenderVotes([]);
+      }
 
       pushRoomNotice(noticeText);
       const systemMsg: ChatMessage = {
         id: `sys_vote_${Date.now()}_${Math.random()}`,
         senderId: 'system',
         senderName: 'System',
-        senderAvatar: action === 'KICK' ? 'system-kick' : 'system-ban',
+        senderAvatar: systemAvatar,
         text: noticeText,
         timestamp: Date.now(),
         isSystem: true
@@ -999,32 +1108,54 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (action === 'KICK') {
         kickedPlayersRef.current.add(targetId);
         multiplayer.kickPlayer(targetId, 'Kicked by democratic vote');
-      } else {
+        setPlayers(prev => {
+          const next = prev.filter(p => p.id !== targetId);
+          setPlayerOrder(ord => {
+            const nextOrd = ord.filter(id => id !== targetId);
+            multiplayer.send({
+              type: 'GAME_PLAYERS_UPDATE',
+              players: next,
+              playerOrder: nextOrd
+            });
+            return nextOrd;
+          });
+          return next;
+        });
+
+        setTimeout(() => {
+          multiplayer.send({
+            type: 'VOTE_KICK_BAN_SYNC',
+            kickVotes: {},
+            banVotes: {}
+          });
+        }, 500);
+      } else if (action === 'BAN') {
         kickedPlayersRef.current.add(targetId);
         multiplayer.banPlayer(targetId, 'Banned by democratic vote');
-      }
-
-      setPlayers(prev => {
-        const next = prev.filter(p => p.id !== targetId);
-        setPlayerOrder(ord => {
-          const nextOrd = ord.filter(id => id !== targetId);
-          multiplayer.send({
-            type: 'GAME_PLAYERS_UPDATE',
-            players: next,
-            playerOrder: nextOrd
+        setPlayers(prev => {
+          const next = prev.filter(p => p.id !== targetId);
+          setPlayerOrder(ord => {
+            const nextOrd = ord.filter(id => id !== targetId);
+            multiplayer.send({
+              type: 'GAME_PLAYERS_UPDATE',
+              players: next,
+              playerOrder: nextOrd
+            });
+            return nextOrd;
           });
-          return nextOrd;
+          return next;
         });
-        return next;
-      });
 
-      setTimeout(() => {
-        multiplayer.send({
-          type: 'VOTE_KICK_BAN_SYNC',
-          kickVotes: {},
-          banVotes: {}
-        });
-      }, 500);
+        setTimeout(() => {
+          multiplayer.send({
+            type: 'VOTE_KICK_BAN_SYNC',
+            kickVotes: {},
+            banVotes: {}
+          });
+        }, 500);
+      } else {
+        endMatchAndReturnToLobby();
+      }
     }
   };
 
@@ -1102,6 +1233,38 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
     });
   };
 
+  const handleVoteSurrenderRequest = (voterId: string) => {
+    setSurrenderVotes(prev => {
+      const isRetracting = prev.includes(voterId);
+      const nextVotes = isRetracting
+        ? prev.filter(id => id !== voterId)
+        : [...prev, voterId];
+
+      multiplayer.send({
+        type: 'VOTE_SURRENDER_SYNC',
+        surrenderVotes: nextVotes
+      });
+
+      if (!isRetracting && prev.length === 0) {
+        const initiator = onlinePlayersRef.current.find(p => p.id === voterId);
+        if (initiator) {
+          multiplayer.send({
+            type: 'VOTE_INITIATED',
+            targetId: '',
+            targetName: 'Surrender',
+            voteType: 'SURRENDER',
+            initiatorName: initiator.name,
+            initiatorId: voterId
+          });
+          triggerVoteNotificationLocal('SURRENDER', '', 'Surrender', voterId, initiator.name);
+        }
+      }
+
+      checkDemocraticMajority('', nextVotes, 'SURRENDER');
+      return nextVotes;
+    });
+  };
+
   const voteToKickPlayer = (targetId: string) => {
     playClick();
     if (!isMultiplayer) return;
@@ -1125,6 +1288,19 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
       multiplayer.send({
         type: 'VOTE_BAN_REQUEST',
         targetId,
+        voterId: myPlayerId
+      });
+    }
+  };
+
+  const voteToSurrender = () => {
+    playClick();
+    if (!isMultiplayer) return;
+    if (isHost) {
+      handleVoteSurrenderRequest(myPlayerId);
+    } else {
+      multiplayer.send({
+        type: 'VOTE_SURRENDER_REQUEST',
         voterId: myPlayerId
       });
     }
@@ -1466,10 +1642,22 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
         }
         break;
 
+      case 'VOTE_SURRENDER_REQUEST':
+        if (isHost) {
+          handleVoteSurrenderRequest(msg.voterId);
+        }
+        break;
+
       case 'VOTE_KICK_BAN_SYNC':
         if (!isHost) {
           setKickVotes(msg.kickVotes);
           setBanVotes(msg.banVotes);
+        }
+        break;
+
+      case 'VOTE_SURRENDER_SYNC':
+        if (!isHost) {
+          setSurrenderVotes(msg.surrenderVotes);
         }
         break;
 
@@ -2521,7 +2709,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setGameState('SETUP');
   };
 
-  const startGame = () => {
+  const startGame = async () => {
     if (isMultiplayer && !isHost) {
       multiplayer.send({ type: 'START_GAME_REQUEST' });
       return;
@@ -2545,7 +2733,28 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
     playClick();
     // 1. Select word pair
     const recentCommonWords = history.map(h => h.commonWord);
-    const { pair, chosenCategory: cat } = getRandomWordPair(selectedCategories, difficulty, customWordPairs, recentCommonWords);
+    let pair: WordPair;
+    let cat: string;
+
+    if (useAiWordGeneration && geminiApiKey) {
+      const aiPair = await getAiWordPairOrNull(selectedCategories, difficulty, customWordPairs, geminiApiKey);
+      if (aiPair) {
+        pair = aiPair;
+        cat = 'AI Generated';
+        setAiGenerationError('');
+      } else {
+        const fallback = getRandomWordPair(selectedCategories, difficulty, customWordPairs, recentCommonWords);
+        pair = fallback.pair;
+        cat = fallback.chosenCategory;
+        setAiGenerationError('AI generation did not return a usable pair; using built-in words instead.');
+      }
+    } else {
+      const fallback = getRandomWordPair(selectedCategories, difficulty, customWordPairs, recentCommonWords);
+      pair = fallback.pair;
+      cat = fallback.chosenCategory;
+      setAiGenerationError('');
+    }
+
     setCommonWord(pair.common);
     setImpostorWord(pair.impostor);
     setChosenCategory(cat);
@@ -2972,6 +3181,12 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setThemePaletteId,
         isMultiplayer,
         isHost,
+        useAiWordGeneration,
+        setUseAiWordGeneration,
+        aiGenerationError,
+        setAiGenerationError,
+        geminiApiKey,
+        setGeminiApiKey,
         roomCode,
         myPlayerId,
         multiplayerStatus,
@@ -3017,6 +3232,8 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
         roomNotice,
         voteNotification,
         dismissVoteNotification,
+        surrenderVotes,
+        voteToSurrender,
         isVoiceActive,
         toggleVoice,
         micVolume,
@@ -3031,8 +3248,6 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
         toggleDeafenAll,
         deafenedPlayerIds,
         toggleDeafenPlayer,
-        geminiApiKey,
-        setGeminiApiKey,
       }}
     >
       {children}
