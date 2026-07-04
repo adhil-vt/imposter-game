@@ -354,11 +354,6 @@ interface GameContextType {
   // Gemini API key
   geminiApiKey: string;
   setGeminiApiKey: (key: string) => void;
-
-  // Legacy vote methods
-  voteToKickPlayer: (targetId: string) => void;
-  voteToBanPlayer: (targetId: string) => void;
-  voteToSurrender: () => void;
 }
 
 const GameContext = createContext<GameContextType | undefined>(undefined);
