@@ -34,15 +34,14 @@ export type NetworkMessage =
   | { type: 'GAME_OVER'; winner: 'CREWMATES' | 'IMPOSTOR'; voteStats: Record<string, number>; votes: Record<string, string>; impostorId: string }
   | { type: 'PLAY_AGAIN' }
   | { type: 'STATE_CHANGE'; state: string }
-  | { type: 'KICKED'; reason?: string; isBan?: boolean }
-  | { type: 'VOTE_INITIATED'; targetId: string; targetName: string; voteType: 'KICK' | 'BAN' | 'SURRENDER'; initiatorName: string; initiatorId: string }
-  | { type: 'GAME_PLAYERS_UPDATE'; players: any[]; playerOrder: string[] }
+  | { type: 'KICKED'; reason?: string }
+  | { type: 'BANNED'; reason?: string }
   | { type: 'CHAT'; message: any }
   | { type: 'ROOM_NOTICE'; text: string }
   | { type: 'SETTINGS_UPDATE'; difficulty: any; selectedCategories: any[]; impostorKnowsRole: boolean; randomizeOrder: boolean; hintsEnabled: boolean; clueTimerLimit: number }
   | { type: 'TRANSFER_HOST'; newAdminId: string }
-  | { type: 'KICK_REQUEST'; targetId: string }
-  | { type: 'BAN_REQUEST'; targetId: string }
+  | { type: 'KICK_REQUEST'; targetId: string; reason?: string }
+  | { type: 'BAN_REQUEST'; targetId: string; reason?: string }
   | { type: 'START_GAME_REQUEST' }
   | { type: 'RESTART_GAME_REQUEST' }
   | { type: 'RENAME_PLAYER'; playerId: string; name: string }
@@ -50,40 +49,9 @@ export type NetworkMessage =
   | { type: 'READY_STATUS_UPDATE'; readyPlayers: string[] }
   | { type: 'LEAVE'; playerId: string }
   | { type: 'HOST_LEFT' }
-  | { type: 'PING'; timestamp: number }
-  | { type: 'PONG'; timestamp: number }
-  | { type: 'PING_UPDATE'; pings: Record<string, number> }
-  | { type: 'VOTE_KICK_REQUEST'; targetId: string; voterId: string }
-  | { type: 'VOTE_BAN_REQUEST'; targetId: string; voterId: string }
-  | { type: 'VOTE_SURRENDER_REQUEST'; voterId: string }
-  | { type: 'VOTE_KICK_BAN_SYNC'; kickVotes: Record<string, string[]>; banVotes: Record<string, string[]> }
-  | { type: 'VOTE_SURRENDER_SYNC'; surrenderVotes: string[] }
-  | { type: 'GAME_IN_PROGRESS'; isStarted: boolean; currentGameState: string }
-  | { type: 'VOICE_TOGGLE'; active: boolean };
-
-const ICE_SERVERS = [
-  { urls: 'stun:stun.l.google.com:19302' },
-  { urls: 'stun:stun1.l.google.com:19302' },
-  { urls: 'stun:stun2.l.google.com:19302' },
-  { urls: 'stun:stun3.l.google.com:19302' },
-  { urls: 'stun:stun4.l.google.com:19302' },
-  { urls: 'stun:global.stun.twilio.com:3478' },
-  {
-    urls: 'turn:openrelay.metered.ca:80',
-    username: 'openrelayproject',
-    credential: 'openrelayproject'
-  },
-  {
-    urls: 'turn:openrelay.metered.ca:443',
-    username: 'openrelayproject',
-    credential: 'openrelayproject'
-  },
-  {
-    urls: 'turn:openrelay.metered.ca:443?transport=tcp',
-    username: 'openrelayproject',
-    credential: 'openrelayproject'
-  }
-];
+  | { type: 'VOTE_MOD_START'; voteId: string; action: 'kick' | 'ban'; targetId: string; targetName: string; initiatorId: string; initiatorName: string; reason?: string }
+  | { type: 'VOTE_MOD_CAST'; voteId: string; voterId: string; vote: 'yes' | 'no' }
+  | { type: 'VOTE_MOD_RESULT'; voteId: string; action: 'kick' | 'ban'; targetId: string; targetName: string; passed: boolean; reason?: string };
 
 class MultiplayerService {
   private peer: Peer | null = null;
@@ -203,7 +171,7 @@ class MultiplayerService {
         // Reject banned players immediately (by Peer ID if re-connecting via existing WebRTC channel)
         if (this.bannedIds.has(conn.peer)) {
           conn.on('open', () => {
-            conn.send({ type: 'KICKED', reason: 'Banned from the room', isBan: true });
+            conn.send({ type: 'BANNED', reason: 'You are banned from this room.' });
             setTimeout(() => conn.close(), 500);
           });
           return;
@@ -440,12 +408,12 @@ class MultiplayerService {
     });
   }
 
-  public kickPlayer(playerId: string, reason?: string, isBan?: boolean) {
+  public kickPlayer(playerId: string, reason?: string) {
     if (this.isHost) {
       const conn = this.connections[playerId];
       if (conn) {
         if (conn.open) {
-          conn.send({ type: 'KICKED', reason, isBan });
+          conn.send({ type: 'KICKED', reason });
         }
         setTimeout(() => {
           try {
@@ -474,11 +442,14 @@ class MultiplayerService {
   public banPlayer(playerId: string, reason?: string) {
     if (this.isHost) {
       this.bannedIds.add(playerId);
-      const deviceId = this.peerToDeviceMap.get(playerId);
-      if (deviceId) {
-        this.bannedDeviceIds.set(deviceId, reason || 'Banned by host');
+      const conn = this.connections[playerId];
+      if (conn) {
+        if (conn.open) {
+          conn.send({ type: 'BANNED', reason });
+        }
+        conn.close();
+        delete this.connections[playerId];
       }
-      this.kickPlayer(playerId, reason, true);
     }
   }
 
