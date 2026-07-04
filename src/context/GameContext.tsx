@@ -800,10 +800,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   // Non-blocking vote notification toast
-  const [voteNotification, setVoteNotification] = useState<GameContextType['voteNotification']>(null);
-  const voteNotificationTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-
+  const [voteNotification] = useState<GameContextType['voteNotification']>(null);
 
   const handleVoteKickRequest = (targetId: string, voterId: string) => {
     setKickVotes(prev => {
