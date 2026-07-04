@@ -803,77 +803,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [voteNotification, setVoteNotification] = useState<GameContextType['voteNotification']>(null);
   const voteNotificationTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const pushVoteNotification = (notification: GameContextType['voteNotification']) => {
-    if (voteNotificationTimerRef.current) {
-      clearTimeout(voteNotificationTimerRef.current);
-    }
-    setVoteNotification(notification);
-    // Auto-dismiss after 10s if not acted upon
-    if (notification) {
-      voteNotificationTimerRef.current = setTimeout(() => {
-        setVoteNotification(null);
-      }, 10000);
-    }
-  };
 
-  const dismissVoteNotification = () => {
-    if (voteNotificationTimerRef.current) {
-      clearTimeout(voteNotificationTimerRef.current);
-    }
-    setVoteNotification(null);
-  };
-
-  const triggerVoteNotificationLocal = (
-    voteType: 'KICK' | 'BAN' | 'SURRENDER',
-    targetId: string,
-    targetName: string,
-    initiatorId: string,
-    initiatorName: string
-  ) => {
-    const currentId = myPlayerIdRef.current;
-    if (targetId !== currentId && initiatorId !== currentId) {
-      const action = voteType === 'KICK' ? 'kick' : voteType === 'BAN' ? 'ban' : 'surrender';
-      const label = voteType === 'KICK' ? 'Kick' : voteType === 'BAN' ? 'Ban' : 'Surrender';
-      pushVoteNotification({
-        id: `vote_${Date.now()}`,
-        message: `🗳️ ${initiatorName} wants to ${action}${voteType === 'SURRENDER' ? '' : ` ${targetName}`}. Vote ${label}?`,
-        onAccept: () => {
-          if (multiplayer.isHost) {
-            if (voteType === 'KICK') {
-              handleVoteKickRequest(targetId, currentId);
-            } else if (voteType === 'BAN') {
-              handleVoteBanRequest(targetId, currentId);
-            } else {
-              handleVoteSurrenderRequest(currentId);
-            }
-          } else {
-            if (voteType === 'KICK') {
-              multiplayer.send({
-                type: 'VOTE_KICK_REQUEST',
-                targetId,
-                voterId: currentId
-              });
-            } else if (voteType === 'BAN') {
-              multiplayer.send({
-                type: 'VOTE_BAN_REQUEST',
-                targetId,
-                voterId: currentId
-              });
-            } else {
-              multiplayer.send({
-                type: 'VOTE_SURRENDER_REQUEST',
-                voterId: currentId
-              });
-            }
-          }
-          setVoteNotification(null);
-        },
-        onDismiss: () => {
-          setVoteNotification(null);
-        }
-      });
-    }
-  };
 
   const handleVoteKickRequest = (targetId: string, voterId: string) => {
     setKickVotes(prev => {
@@ -3238,11 +3168,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
         toggleDeafenAll,
         deafenedPlayerIds,
         toggleDeafenPlayer,
-        geminiApiKey,
-        setGeminiApiKey,
         surrenderVotes,
-        voteToKickPlayer,
-        voteToBanPlayer,
         voteToSurrender,
       }}
     >
