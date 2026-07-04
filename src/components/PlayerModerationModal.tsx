@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useGame } from '../context/GameContext';
 import { Button } from './Button';
-import { X, ShieldAlert, UserMinus, VolumeX, Volume2, Shield, Vote } from 'lucide-react';
+import { X, ShieldAlert, UserMinus, VolumeX, Volume2, Shield, Vote, MicOff, Headphones } from 'lucide-react';
 import { playClick } from '../utils/sounds';
 
 interface PlayerModerationModalProps {
@@ -28,6 +28,11 @@ export const PlayerModerationModal: React.FC<PlayerModerationModalProps> = ({
     startVoteKick,
     startVoteBan,
     gameState,
+    isLobbyAdmin,
+    micMuted,
+    toggleMicMute,
+    deafenAll,
+    toggleDeafenAll,
   } = useGame();
 
   const isMe = playerId === myPlayerId;

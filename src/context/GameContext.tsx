@@ -326,6 +326,39 @@ interface GameContextType {
   startVoteKick: (playerId: string, reason?: string) => void;
   startVoteBan: (playerId: string, reason?: string) => void;
   castModerationVote: (vote: 'yes' | 'no') => void;
+
+  // Vote notification toast
+  voteNotification: {
+    id: string;
+    message: string;
+    onAccept: () => void;
+    onDismiss: () => void;
+  } | null;
+
+  // Voice chat
+  isVoiceActive: boolean;
+  toggleVoice: () => void;
+  micVolume: number;
+  setMicVolume: (v: number) => void;
+  speakerVolume: number;
+  setSpeakerVolume: (v: number) => void;
+  playersSpeaking: Record<string, boolean>;
+  playersVolume: Record<string, number>;
+  micMuted: boolean;
+  toggleMicMute: () => void;
+  deafenAll: boolean;
+  toggleDeafenAll: () => void;
+  deafenedPlayerIds: string[];
+  toggleDeafenPlayer: (playerId: string) => void;
+
+  // Gemini API key
+  geminiApiKey: string;
+  setGeminiApiKey: (key: string) => void;
+
+  // Legacy vote methods
+  voteToKickPlayer: (targetId: string) => void;
+  voteToBanPlayer: (targetId: string) => void;
+  voteToSurrender: () => void;
 }
 
 const GameContext = createContext<GameContextType | undefined>(undefined);
@@ -586,6 +619,40 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [deafenAll, setDeafenAll] = useState<boolean>(false);
   const [deafenedPlayerIds, setDeafenedPlayerIds] = useState<string[]>([]); // local per-player deafen
 
+  const toggleMicMute = () => {
+    playClick();
+    setMicMuted(prev => {
+      const next = !prev;
+      if (gainNodeRef.current) {
+        gainNodeRef.current.gain.value = next ? 0 : micVolume;
+      }
+      return next;
+    });
+  };
+
+  const toggleDeafenAll = () => {
+    playClick();
+    setDeafenAll(prev => {
+      const next = !prev;
+      Object.values(audioElementsRef.current).forEach(a => {
+        try { a.muted = next; } catch (e) { }
+      });
+      return next;
+    });
+  };
+
+  const toggleDeafenPlayer = (playerId: string) => {
+    playClick();
+    setDeafenedPlayerIds(prev => {
+      const next = prev.includes(playerId) ? prev.filter(id => id !== playerId) : [...prev, playerId];
+      const audio = audioElementsRef.current[playerId];
+      if (audio) {
+        try { audio.muted = next.includes(playerId); } catch (e) { }
+      }
+      return next;
+    });
+  };
+
   const toggleMutePlayer = (playerId: string) => {
     playClick();
     if (isLobbyAdmin) {
@@ -611,6 +678,13 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [activeVote, setActiveVote] = useState<GameContextType['activeVote']>(null);
   const activeVoteRef = useRef<GameContextType['activeVote']>(null);
   useEffect(() => { activeVoteRef.current = activeVote; }, [activeVote]);
+
+  const kickVotesRef = useRef<Record<string, string[]>>({});
+  const banVotesRef = useRef<Record<string, string[]>>({});
+  const surrenderVotesRef = useRef<string[]>([]);
+  useEffect(() => { kickVotesRef.current = kickVotes; }, [kickVotes]);
+  useEffect(() => { banVotesRef.current = banVotes; }, [banVotes]);
+  useEffect(() => { surrenderVotesRef.current = surrenderVotes; }, [surrenderVotes]);
 
   // Sync lobby settings across multiplayer network if we are the admin
   useEffect(() => {
@@ -803,6 +877,67 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
           setVoteNotification(null);
         }
       });
+    }
+  };
+
+  const handleVoteKickRequest = (targetId: string, voterId: string) => {
+    setKickVotes(prev => {
+      const current = prev[targetId] || [];
+      const isRetracting = current.includes(voterId);
+      const nextVotes = isRetracting ? current.filter(id => id !== voterId) : [...current, voterId];
+      const next = { ...prev, [targetId]: nextVotes };
+      multiplayer.send({ type: 'VOTE_KICK_BAN_SYNC', kickVotes: next, banVotes: banVotesRef.current });
+      return next;
+    });
+  };
+
+  const handleVoteBanRequest = (targetId: string, voterId: string) => {
+    setBanVotes(prev => {
+      const current = prev[targetId] || [];
+      const isRetracting = current.includes(voterId);
+      const nextVotes = isRetracting ? current.filter(id => id !== voterId) : [...current, voterId];
+      const next = { ...prev, [targetId]: nextVotes };
+      multiplayer.send({ type: 'VOTE_KICK_BAN_SYNC', kickVotes: kickVotesRef.current, banVotes: next });
+      return next;
+    });
+  };
+
+  const handleVoteSurrenderRequest = (voterId: string) => {
+    setSurrenderVotes(prev => {
+      const isRetracting = prev.includes(voterId);
+      const nextVotes = isRetracting ? prev.filter(id => id !== voterId) : [...prev, voterId];
+      multiplayer.send({ type: 'VOTE_SURRENDER_SYNC', surrenderVotes: nextVotes });
+      return nextVotes;
+    });
+  };
+
+  const voteToKickPlayer = (targetId: string) => {
+    playClick();
+    if (!isMultiplayer) return;
+    if (isHost) {
+      handleVoteKickRequest(targetId, myPlayerId);
+    } else {
+      multiplayer.send({ type: 'VOTE_KICK_REQUEST', targetId, voterId: myPlayerId });
+    }
+  };
+
+  const voteToBanPlayer = (targetId: string) => {
+    playClick();
+    if (!isMultiplayer) return;
+    if (isHost) {
+      handleVoteBanRequest(targetId, myPlayerId);
+    } else {
+      multiplayer.send({ type: 'VOTE_BAN_REQUEST', targetId, voterId: myPlayerId });
+    }
+  };
+
+  const voteToSurrender = () => {
+    playClick();
+    if (!isMultiplayer) return;
+    if (isHost) {
+      handleVoteSurrenderRequest(myPlayerId);
+    } else {
+      multiplayer.send({ type: 'VOTE_SURRENDER_REQUEST', voterId: myPlayerId });
     }
   };
 
@@ -3093,6 +3228,27 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
         startVoteKick,
         startVoteBan,
         castModerationVote,
+        voteNotification,
+        isVoiceActive,
+        toggleVoice,
+        micVolume,
+        setMicVolume,
+        speakerVolume,
+        setSpeakerVolume,
+        playersSpeaking,
+        playersVolume,
+        micMuted,
+        toggleMicMute,
+        deafenAll,
+        toggleDeafenAll,
+        deafenedPlayerIds,
+        toggleDeafenPlayer,
+        geminiApiKey,
+        setGeminiApiKey,
+        surrenderVotes,
+        voteToKickPlayer,
+        voteToBanPlayer,
+        voteToSurrender,
       }}
     >
       {children}

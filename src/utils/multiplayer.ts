@@ -34,7 +34,7 @@ export type NetworkMessage =
   | { type: 'GAME_OVER'; winner: 'CREWMATES' | 'IMPOSTOR'; voteStats: Record<string, number>; votes: Record<string, string>; impostorId: string }
   | { type: 'PLAY_AGAIN' }
   | { type: 'STATE_CHANGE'; state: string }
-  | { type: 'KICKED'; reason?: string }
+  | { type: 'KICKED'; reason?: string; isBan?: boolean }
   | { type: 'BANNED'; reason?: string }
   | { type: 'CHAT'; message: any }
   | { type: 'ROOM_NOTICE'; text: string }
@@ -49,9 +49,44 @@ export type NetworkMessage =
   | { type: 'READY_STATUS_UPDATE'; readyPlayers: string[] }
   | { type: 'LEAVE'; playerId: string }
   | { type: 'HOST_LEFT' }
+  | { type: 'PING'; timestamp: number }
+  | { type: 'PONG'; timestamp: number }
+  | { type: 'PING_UPDATE'; pings: Record<string, number> }
+  | { type: 'VOICE_TOGGLE'; active: boolean }
+  | { type: 'GAME_IN_PROGRESS'; isStarted: boolean; currentGameState: string }
+  | { type: 'VOTE_KICK_REQUEST'; targetId: string; voterId: string }
+  | { type: 'VOTE_BAN_REQUEST'; targetId: string; voterId: string }
+  | { type: 'VOTE_SURRENDER_REQUEST'; voterId: string }
+  | { type: 'VOTE_KICK_BAN_SYNC'; kickVotes: Record<string, string[]>; banVotes: Record<string, string[]> }
+  | { type: 'VOTE_SURRENDER_SYNC'; surrenderVotes: string[] }
+  | { type: 'GAME_PLAYERS_UPDATE'; players: any[]; playerOrder: string[] }
   | { type: 'VOTE_MOD_START'; voteId: string; action: 'kick' | 'ban'; targetId: string; targetName: string; initiatorId: string; initiatorName: string; reason?: string }
   | { type: 'VOTE_MOD_CAST'; voteId: string; voterId: string; vote: 'yes' | 'no' }
   | { type: 'VOTE_MOD_RESULT'; voteId: string; action: 'kick' | 'ban'; targetId: string; targetName: string; passed: boolean; reason?: string };
+
+const ICE_SERVERS = [
+  { urls: 'stun:stun.l.google.com:19302' },
+  { urls: 'stun:stun1.l.google.com:19302' },
+  { urls: 'stun:stun2.l.google.com:19302' },
+  { urls: 'stun:stun3.l.google.com:19302' },
+  { urls: 'stun:stun4.l.google.com:19302' },
+  { urls: 'stun:global.stun.twilio.com:3478' },
+  {
+    urls: 'turn:openrelay.metered.ca:80',
+    username: 'openrelayproject',
+    credential: 'openrelayproject'
+  },
+  {
+    urls: 'turn:openrelay.metered.ca:443',
+    username: 'openrelayproject',
+    credential: 'openrelayproject'
+  },
+  {
+    urls: 'turn:openrelay.metered.ca:443?transport=tcp',
+    username: 'openrelayproject',
+    credential: 'openrelayproject'
+  }
+];
 
 class MultiplayerService {
   private peer: Peer | null = null;
